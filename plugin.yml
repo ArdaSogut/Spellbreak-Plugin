@@ -1,0 +1,24 @@
+name: Spellbreak
+version: '1.0-SNAPSHOT'
+main: me.ratatamakata.spellbreak.Spellbreak
+api-version: '1.20'
+author: Ratatamakata
+depend: [MythicMobs, ProtocolLib, LibsDisguises, PacketEventAPI]
+
+commands:
+  spellbreakcooldownreset:
+    description: Resets the player's ability cooldowns.
+    usage: /spellbreakcooldownreset
+    permission: spellbreak.command.cooldownreset
+    aliases: [sbcr, cdreset]
+  team:
+    description: Manages player teams/parties.
+    usage: /<command> [subcommand] [args]
+    aliases: [party, p]
+  # Add other commands here if you have them
+
+permissions:
+  spellbreak.command.cooldownreset:
+    description: Allows usage of the /spellbreakcooldownreset command.
+    default: op
+  # Add other permissions here 
