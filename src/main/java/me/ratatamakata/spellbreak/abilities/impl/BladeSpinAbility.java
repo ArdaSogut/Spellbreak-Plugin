@@ -19,13 +19,13 @@ import java.util.UUID;
 
 public class BladeSpinAbility implements Ability {
 
-    private int cooldown = 20;
+    private int cooldown = 18;
     private int manaCost = 50;
     private String requiredClass = "runesmith";
     private double duration = 5.0;
-    private double radius = 2.5;
-    private double damagePerHit = 1.5;
-    private int maxHitsPerEntity = 3;
+    private double radius = 2.4;
+    private double damagePerHit = 1.0;
+    private int maxHitsPerEntity = 4;
     private double forwardSpeed = 0.6;
     private double bounceStrength = 1.5;
     private int bounceCooldown = 10;

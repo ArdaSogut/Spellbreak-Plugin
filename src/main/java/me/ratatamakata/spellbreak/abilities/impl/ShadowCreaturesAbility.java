@@ -20,13 +20,13 @@ import java.util.concurrent.ConcurrentHashMap;
 public class ShadowCreaturesAbility implements Ability {
     private String name = "ShadowCreatures";
     private String description = "Summon two shadowy orbs that attack enemies in a dash, giving them a chance to dodge";
-    private int cooldown = 30;
+    private int cooldown = 25;
     private int manaCost = 60;
     private String requiredClass = "mindshaper";
-    private int chargeTime = 20;
-    private int duration = 20 * 15;
+    private int chargeTime = 10;
+    private int duration = 20 * 5;
     private double attackRange = 8.0;
-    private int damage = 5;
+    private int damage = 1;
     private double orbDistance = 2.0;
     private int attackCooldown = 20;
     private double attackSpeed = 0.15; // Slower dash speed
@@ -93,10 +93,10 @@ public class ShadowCreaturesAbility implements Ability {
         globalOrbCooldown.put(player.getUniqueId(), 0);
 
         SpellLevel spellLevel = Spellbreak.getInstance().getLevelManager().getSpellLevel(player.getUniqueId(), getName(), "ShadowCreatures");
-        double adjustedOrbDistance = orbDistance + (spellLevel.getLevel() * 0.5); // Increase orb distance based on level
-        int adjustedDamage = damage + (spellLevel.getLevel() * 2); // Increase damage based on level
-        int adjustedCooldown = (int) (cooldown * spellLevel.getCooldownReduction()); // Adjust cooldown based on level
-        int adjustedDuration = duration + (spellLevel.getLevel() * 5); // Increase duration based on level
+        double adjustedOrbDistance = orbDistance ;
+        int adjustedDamage = damage;
+        int adjustedCooldown = cooldown;
+        int adjustedDuration = duration;
 
         for (int i = 0; i < 2; i++) {
             final int orbId = i;
@@ -452,7 +452,7 @@ public class ShadowCreaturesAbility implements Ability {
         cooldown = cfg.getInt(base + "cooldown", cooldown);
         manaCost = cfg.getInt(base + "mana-cost", manaCost);
         chargeTime = cfg.getInt(base + "charge-time", chargeTime);
-        duration = cfg.getInt(base + "duration", 15) * 20;
+        duration = cfg.getInt(base + "duration", 15) * 5;
         attackRange = cfg.getDouble(base + "attack-range", attackRange);
         damage = cfg.getInt(base + "damage", damage);
         orbDistance = cfg.getDouble(base + "orb-distance", orbDistance);

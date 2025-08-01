@@ -16,7 +16,7 @@ import java.util.concurrent.ThreadLocalRandom;
 
 public class SwarmSigilAbility implements Ability {
 
-    private int cooldown = 25;
+    private int cooldown = 18;
     private int manaCost = 60;
     private String requiredClass = "runesmith";
     private int minDrones = 2;
@@ -26,9 +26,9 @@ public class SwarmSigilAbility implements Ability {
     private double seekRadius = 8.0;
     private double stickRadius = 1.5;
     private int stickDuration = 60;
-    private double explosionDamage = 3.0;
+    private double explosionDamage = 1.0;
     private double explosionRadius = 4.0;
-    private int droneDuration = 300; // ticks
+    private int droneDuration = 200; // ticks
     private int updateInterval = 1; // Changed to 1 tick for smooth movement
 
     private static final Map<UUID, List<SwarmDrone>> activeDrones = new HashMap<>();

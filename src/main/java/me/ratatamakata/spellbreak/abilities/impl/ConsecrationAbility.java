@@ -15,10 +15,10 @@ import java.util.stream.Collectors;
 
 public class ConsecrationAbility implements Ability {
 
-    private int cooldown = 25; // Adjusted default cooldown
+    private int cooldown = 13; // Adjusted default cooldown
     private int manaCost = 60; // Adjusted default mana cost
     private String requiredClass = "lightbringer";
-    private double damageAmount = 6.0; // Damage on slam
+    private double damageAmount = 3.0; // Damage on slam
     private double liftRadius = 5.0;
     private double liftHeight = 2.5; // Max height entities are lifted
     private int liftDurationTicks = 30; // How long they stay up before slam

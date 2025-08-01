@@ -24,9 +24,9 @@ public class DreamwalkerAbility implements Ability {
     private int cooldown = 25;
     private int manaCost = 50;
     private String requiredClass = "mindshaper";
-    private int durationTicks = 20 * 6;
+    private int durationTicks = 20 * 4;
     private boolean successfulActivation = false;
-    private double damage = 3.0;
+    private double damage = 1.0;
 
     public static final Set<UUID> activePlayers = new HashSet<>();
     public static final Map<UUID, GameMode> previousGamemodes = new HashMap<>();
@@ -181,7 +181,7 @@ public class DreamwalkerAbility implements Ability {
         String base = "abilities.dreamwalker.";
         cooldown = cfg.getInt(base + "cooldown", cooldown);
         manaCost = cfg.getInt(base + "mana-cost", manaCost);
-        durationTicks = cfg.getInt(base + "duration-seconds", 6) * 20; // Base duration
+        durationTicks = cfg.getInt(base + "duration-seconds", 4) * 20; // Base duration
         damage = cfg.getDouble(base + "damage", damage);
     }
 

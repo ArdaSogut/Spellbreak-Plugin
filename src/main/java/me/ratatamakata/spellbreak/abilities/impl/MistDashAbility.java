@@ -19,16 +19,16 @@ import java.util.*;
 
 public class MistDashAbility implements Ability, Listener {
 
-    private int cooldown = 15;
+    private int cooldown = 13;
     private int manaCost = 50;
     private String requiredClass = "necromancer";
     private int durationTicks = 20 * 3;
-    private double speed = 0.7;
+    private double speed = 0.5;
     private double yLimit = 10.0;
     private double effectRadius = 2.5;
-    private int poisonDuration = 80;
+    private int poisonDuration = 30;
     private int poisonAmplifier = 0;
-    private double poisonDamage = 1.0; // Damage per tick
+    private double poisonDamage = .5; // Damage per tick
 
     private final Map<UUID, MistState> activePlayers = new HashMap<>();
     private final Map<UUID, BukkitRunnable> activeTasks = new HashMap<>();

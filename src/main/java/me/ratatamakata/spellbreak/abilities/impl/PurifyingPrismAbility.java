@@ -30,11 +30,11 @@ public class PurifyingPrismAbility implements Ability {
     private int manaCost = 50;
     private String requiredClass = "lightbringer";
 
-    private int prismDurationTicks = 200;
-    private int maxRayInstances = 10;
+    private int prismDurationTicks = 100;
+    private int maxRayInstances = 4;
     private int rayFireIntervalTicks = 20;
-    private double raySearchRadius = 10.0;
-    private double damagePerRay = 3.0;
+    private double raySearchRadius = 7.0;
+    private double damagePerRay = 1.0;
     private double prismHeightOffset = 2.5;
     private int prismVisualParticleCount = 8;
     private float prismRotationSpeed = 0.1f;

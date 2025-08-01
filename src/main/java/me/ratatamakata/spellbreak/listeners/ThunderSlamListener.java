@@ -34,12 +34,10 @@ public class ThunderSlamListener implements Listener {
     public void onSneak(PlayerToggleSneakEvent e) {
         Player p = e.getPlayer();
         if (e.isSneaking() && this.isHoldingAbility(p)) {
-            int adjustedCooldown = this.ability.getAdjustedCooldown(p);
-            int adjustedManaCost = this.ability.getAdjustedManaCost(p);
             if (this.cooldowns.isOnCooldown(p, this.ability.getName())) {
                 String var10001 = String.valueOf(ChatColor.BLUE);
                 p.sendMessage(var10001 + "ThunderSlam ready in: " + this.cooldowns.getRemainingCooldown(p, this.ability.getName()) + "s");
-            } else if (!this.mana.consumeMana(p, adjustedManaCost)) {
+            } else if (!this.mana.consumeMana(p, this.ability.getManaCost())) {
                 p.sendMessage(String.valueOf(ChatColor.RED) + "Not enough mana!");
             } else {
                 this.ability.activate(p);
@@ -54,8 +52,7 @@ public class ThunderSlamListener implements Listener {
             if (e.getAction() == Action.LEFT_CLICK_AIR || e.getAction() == Action.LEFT_CLICK_BLOCK) {
                 if (this.ability.isCharging(p)) {
                     this.ability.slamPlayer(p);
-                    int adjustedCooldown = this.ability.getAdjustedCooldown(p);
-                    this.cooldowns.setCooldown(p, this.ability.getName(), adjustedCooldown);
+                    this.cooldowns.setCooldown(p, this.ability.getName(), this.ability.getCooldown());
                 }
             }
         }
@@ -86,4 +83,3 @@ public class ThunderSlamListener implements Listener {
         return this.ability.getName().equalsIgnoreCase(currentAbility) && this.ability.getRequiredClass().equalsIgnoreCase(this.playerData.getPlayerClass(p.getUniqueId()));
     }
 }
-

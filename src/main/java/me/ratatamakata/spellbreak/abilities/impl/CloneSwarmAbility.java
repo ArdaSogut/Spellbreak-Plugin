@@ -20,15 +20,15 @@ import org.bukkit.util.Vector;
 import java.util.*;
 
 public class CloneSwarmAbility implements Ability {
-    private int cooldown = 15;
+    private int cooldown = 12;
     private int manaCost = 20;
     private String requiredClass = "mindshaper";
     private int cloneCount = 4;
     private int cloneDuration = 100; // ticks
-    private double cloneMoveSpeed = 0.3;
+    private double cloneMoveSpeed = 0.4;
     private double cloneJumpForce = 0.6;
-    private double maxTargetDistance = 30.0;
-    private double cloneCollisionDamage = 1.5;
+    private double maxTargetDistance = 25.0;
+    private double cloneCollisionDamage = 1.0;
     private double cloneCollisionRadius = 1.5;
     private double spawnRadius = 3.0; // NEW: radius to space clones
 

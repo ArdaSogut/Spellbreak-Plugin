@@ -17,6 +17,8 @@ import org.bukkit.Particle;
 import org.bukkit.Sound;
 import org.bukkit.World;
 import org.bukkit.Particle.DustOptions;
+import org.bukkit.block.Block;
+import org.bukkit.block.BlockFace;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.LivingEntity;
@@ -27,16 +29,16 @@ import org.bukkit.scheduler.BukkitRunnable;
 import org.bukkit.util.Vector;
 
 public class ThunderSlamAbility implements Ability {
-    private int cooldown = 15;
+    private int cooldown = 16;
     private int manaCost = 80;
     private String requiredClass = "elementalist";
-    private double damage = 4.0D;
-    private double radius = 7.0D;
-    private double launchHeight = 10.0D;
+    private double damage = 3.0D;
+    private double radius = 5.0D;
+    private double launchHeight = 7.0D;
     private double knockUpStrength = 1.2D;
     private double knockBackStrength = 1.5D;
-    private int chargeDuration = 6;
-    private double minDuration = 1.5D;
+    private int chargeDuration = 4;
+    private double minDuration = 0.75D;
     private final Set<UUID> chargingPlayers = new HashSet();
     private final Map<UUID, ThunderSlamAbility.PlayerState> playerStates = new ConcurrentHashMap();
     private final Map<UUID, Long> chargeStartTimes = new ConcurrentHashMap();
@@ -45,6 +47,7 @@ public class ThunderSlamAbility implements Ability {
     private final DustOptions darkChargeParticles = new DustOptions(Color.fromRGB(0, 0, 139), 1.5F);
     private final DustOptions cloudParticles = new DustOptions(Color.fromRGB(30, 144, 255), 2.0F);
     private final DustOptions electricParticles = new DustOptions(Color.fromRGB(255, 255, 255), 1.2F);
+    private final Map<UUID, Float> originalFlySpeeds = new ConcurrentHashMap<>();
 
     public String getName() {
         return "ThunderSlam";
@@ -79,7 +82,6 @@ public class ThunderSlamAbility implements Ability {
             player.getInventory().setItemInMainHand(new ItemStack(Material.AIR));
             player.getInventory().setItemInOffHand(new ItemStack(Material.AIR));
             player.setInvisible(true);
-            player.setInvulnerable(true);
             double flightY = this.computeSafeFlightYLevel(player);
             this.flightYLevels.put(player.getUniqueId(), flightY);
             this.launchPlayer(player, flightY);
@@ -106,8 +108,10 @@ public class ThunderSlamAbility implements Ability {
     }
 
     private void launchPlayer(final Player player, final double flightY) {
+        originalFlySpeeds.put(player.getUniqueId(), player.getFlySpeed());
         player.setAllowFlight(true);
         player.setFlying(true);
+        player.setFlySpeed(0.05f);
         double currentY = player.getLocation().getY();
         double launchStrength = Math.max(0.8D, (flightY - currentY) * 0.15D);
         player.setVelocity(new Vector(0.0D, launchStrength, 0.0D));
@@ -299,14 +303,21 @@ public class ThunderSlamAbility implements Ability {
 
     private Location findGroundLocation(Location start) {
         Location loc = start.clone();
-        World var3 = loc.getWorld();
+        World world = loc.getWorld();
 
-        while(loc.getBlock().getType().isAir() && loc.getY() > 0.0D) {
-            loc.add(0.0D, -1.0D, 0.0D);
+        // start at the block the player is in
+        Block block = loc.getBlock();
+        int depth = 0, maxDepth = 256;
+
+        // walk down up to maxDepth until you hit a non-air block
+        while (block.getType().isAir() && depth++ < maxDepth) {
+            block = block.getRelative(BlockFace.DOWN);
         }
 
-        return loc.add(0.0D, 1.0D, 0.0D);
+        // return one block above that solid block
+        return block.getLocation().add(0.0D, 1.0D, 0.0D);
     }
+
 
     private void doSlamEffects(Location slamLocation) {
         World world = slamLocation.getWorld();
@@ -348,6 +359,13 @@ public class ThunderSlamAbility implements Ability {
         this.chargeStartTimes.remove(uuid);
         this.flightYLevels.remove(uuid);
         ThunderSlamAbility.PlayerState state = (ThunderSlamAbility.PlayerState)this.playerStates.remove(uuid);
+        Float oldSpeed = originalFlySpeeds.remove(uuid);
+        if (oldSpeed != null) {
+            player.setFlySpeed(oldSpeed);
+        } else {
+            // fallback to Bukkit’s default if somehow we didn’t save it
+            player.setFlySpeed(0.1f);
+        }
         if (state != null) {
             player.getInventory().setArmorContents(state.armor());
             player.getInventory().setItemInMainHand(state.mainHand());
@@ -391,43 +409,6 @@ public class ThunderSlamAbility implements Ability {
         return true;
     }
 
-    // --- LEVEL-ADJUSTED (OYUNCUYA FAYDA SAĞLAYAN) DEĞİŞKENLER ---
-    public int getAdjustedCooldown(Player player) {
-        var lvl = me.ratatamakata.spellbreak.Spellbreak.getInstance().getLevelManager().getSpellLevel(
-            player.getUniqueId(),
-            me.ratatamakata.spellbreak.Spellbreak.getInstance().getPlayerDataManager().getPlayerClass(player.getUniqueId()),
-            getName()
-        );
-        return (int) (cooldown * lvl.getCooldownReduction());
-    }
-
-    public int getAdjustedManaCost(Player player) {
-        var lvl = me.ratatamakata.spellbreak.Spellbreak.getInstance().getLevelManager().getSpellLevel(
-            player.getUniqueId(),
-            me.ratatamakata.spellbreak.Spellbreak.getInstance().getPlayerDataManager().getPlayerClass(player.getUniqueId()),
-            getName()
-        );
-        return (int) (manaCost * lvl.getManaCostReduction());
-    }
-
-    public double getAdjustedDamage(Player player) {
-        var lvl = me.ratatamakata.spellbreak.Spellbreak.getInstance().getLevelManager().getSpellLevel(
-            player.getUniqueId(),
-            me.ratatamakata.spellbreak.Spellbreak.getInstance().getPlayerDataManager().getPlayerClass(player.getUniqueId()),
-            getName()
-        );
-        return damage * lvl.getDamageMultiplier();
-    }
-
-    public double getAdjustedRadius(Player player) {
-        var lvl = me.ratatamakata.spellbreak.Spellbreak.getInstance().getLevelManager().getSpellLevel(
-            player.getUniqueId(),
-            me.ratatamakata.spellbreak.Spellbreak.getInstance().getPlayerDataManager().getPlayerClass(player.getUniqueId()),
-            getName()
-        );
-        return radius * lvl.getRangeMultiplier();
-    }
-
     private static record PlayerState(ItemStack[] armor, ItemStack mainHand, ItemStack offHand, boolean wasInvisible, boolean wasInvulnerable, boolean wasAllowFlight, boolean wasFlying) {
         private PlayerState(ItemStack[] armor, ItemStack mainHand, ItemStack offHand, boolean wasInvisible, boolean wasInvulnerable, boolean wasAllowFlight, boolean wasFlying) {
             this.armor = armor;
@@ -468,5 +449,3 @@ public class ThunderSlamAbility implements Ability {
         }
     }
 }
-
-

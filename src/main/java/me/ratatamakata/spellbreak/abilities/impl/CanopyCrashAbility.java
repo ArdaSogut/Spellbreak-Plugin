@@ -15,11 +15,11 @@ import java.util.Set;
 import java.util.UUID;
 
 public class CanopyCrashAbility implements Ability {
-    private int cooldown = 15;
+    private int cooldown = 12;
     private int manaCost = 25;
     private String requiredClass = "archdruid";
-    private double damage = 3.0;
-    private double radius = 5.5;
+    private double damage = 2.0;
+    private double radius = 5.0;
     private double verticalKnockback = 0.8;
     private double horizontalKnockback = 1.2;
     private int particleCount = 30;
@@ -39,7 +39,12 @@ public class CanopyCrashAbility implements Ability {
 
     @Override
     public void activate(Player player) {
-        if (player.isOnGround() || player.getLocation().getY() < minHeight) return;
+        // Remove the problematic absolute Y check and replace with relative height check
+        if (player.isOnGround()) return;
+
+        // Calculate height above ground properly
+        double heightAboveGround = calculateHeightAboveGround(player.getLocation());
+        if (heightAboveGround < minHeight) return;
 
         activeSlams.add(player.getUniqueId());
         World world = player.getWorld();
@@ -76,6 +81,27 @@ public class CanopyCrashAbility implements Ability {
                         2, 0.1, 0.1, 0.1, chargeDust);
             }
         }.runTaskTimer(Spellbreak.getInstance(), 0, 1);
+    }
+    private double calculateHeightAboveGround(Location location) {
+        Block blockBelow = location.getBlock().getRelative(BlockFace.DOWN);
+        int depth = 0;
+        int maxDepth = 256;
+        int worldMinHeight = location.getWorld().getMinHeight(); // This handles negative Y worlds
+
+        // Search downward until we find solid ground or hit world bottom
+        while (!blockBelow.getType().isSolid() &&
+                blockBelow.getY() >= worldMinHeight &&
+                depth++ < maxDepth) {
+            blockBelow = blockBelow.getRelative(BlockFace.DOWN);
+        }
+
+        // If we found solid ground, calculate height
+        if (blockBelow.getType().isSolid()) {
+            return location.getY() - blockBelow.getY() - 1;
+        }
+
+        // If no solid ground found, return -1 to indicate failure
+        return -1;
     }
 
     private void resolveImpact(Player player) {

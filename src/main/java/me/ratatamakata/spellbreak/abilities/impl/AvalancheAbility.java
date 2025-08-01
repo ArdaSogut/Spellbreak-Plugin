@@ -15,17 +15,17 @@ import org.bukkit.util.Vector;
 import java.util.*;
 
 public class AvalancheAbility implements Ability {
-    private int cooldown = 20;
+    private int cooldown = 13;
     private int manaCost = 40;
     private String requiredClass = "elementalist";
     private double baseRadius = 1.5;
     private double maxRadius = 2.2;
-    private double initialSpeed = 1.1;
-    private double speedGain = 0.8;
-    private double maxSpeed = 1.9;
-    private double damage = 2.0;
-    private double knockbackStrength = 1.7;
-    private int maxDuration = 60;
+    private double initialSpeed = 0.5;
+    private double speedGain = 1.0;
+    private double maxSpeed = 0.9;
+    private double damage = 1.0;
+    private double knockbackStrength = 1.5;
+    private int maxDuration = 30;
     private double growthRate = 0.05;
     private int hitCooldownTicks = 20;
 

@@ -38,15 +38,15 @@ public class NatureStepAbility implements Ability {
     private String requiredClass = "archdruid";
     private int maxCharges = 3;
     private int chargeRegenSeconds = 5; // Cooldown per charge
-    private double dashDistance = 16.0; // Increased default range again
+    private double dashDistance = 8.0; // Increased default range again
     private long internalCooldownMillis = 200; // 0.2 seconds between dashes
     // Orb Config
     private boolean orbEnabled = true;
-    private double orbDamage = 2.0;
-    private double orbRadius = 2.0; // Small radius
+    private double orbDamage = 1.0;
+    private double orbRadius = 1.4; // Small radius
     private String orbParticleName = "END_ROD"; // More visible particle
     private String orbExplosionSoundName = "BLOCK_GRASS_BREAK";
-    private int orbDurationTicks = 100; // 5 seconds (20 ticks/second)
+    private int orbDurationTicks = 60; // 5 seconds (20 ticks/second)
     private long orbInternalCooldownMillis = 1000; // 1 second cooldown between orb generations
     private final Map<UUID, Long> lastOrbTime = new HashMap<>(); // Track last orb generation time
 
@@ -115,7 +115,7 @@ public class NatureStepAbility implements Ability {
         maxCharges = cfg.getInt(path + "max-charges", maxCharges);
         chargeRegenSeconds = cfg.getInt(path + "charge-regen-seconds", chargeRegenSeconds);
         // Ensure config loading respects the new default
-        dashDistance = cfg.getDouble(path + "dash-distance", 16.0); 
+        dashDistance = cfg.getDouble(path + "dash-distance", 8.0);
         internalCooldownMillis = cfg.getLong(path + "internal-cooldown-millis", 200); // Allow config override
         
         // Load Orb Config

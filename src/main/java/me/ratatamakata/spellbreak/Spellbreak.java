@@ -105,7 +105,7 @@ public final class Spellbreak extends JavaPlugin implements Listener {
         getServer().getPluginManager().registerEvents(new IronwoodShellListener(ironwoodShellAbilityInstance), this);
         getServer().getPluginManager().registerEvents(new LightCageListener(this), this);
         getServer().getPluginManager().registerEvents(new ConsecrationListener(this),this);
-        getServer().getPluginManager().registerEvents(new BeaconOfClarityListener(this), this);
+        getServer().getPluginManager().registerEvents(new BeaconOfClarityListener(), this);
         getServer().getPluginManager().registerEvents(new RadiantPhaseListener(), this);
         getServer().getPluginManager().registerEvents(new RadiantDashListener(), this);
         getServer().getPluginManager().registerEvents(new PurifyingPrismListener(this),this);
@@ -134,6 +134,8 @@ public final class Spellbreak extends JavaPlugin implements Listener {
 
 
         getCommand("bind").setExecutor(new BindCommand());
+        getCommand("dailies").setExecutor(new DailiesCommand(this));
+        getCommand("reload").setExecutor(new ReloadConfigCommand(this));
         getCommand("class").setExecutor(new ClassCommand());
         getCommand("bind").setTabCompleter(new TabComplete());
         getCommand("class").setTabCompleter(new TabComplete());
@@ -144,7 +146,6 @@ public final class Spellbreak extends JavaPlugin implements Listener {
         getCommand("preset").setTabCompleter(presetExecutor);
         this.getCommand("team").setExecutor(new TeamCommand(this));
         getCommand("level").setExecutor(new LevelCommand(this));
-        getCommand("dailies").setExecutor(new DailiesCommand(this));
 
         // Scoreboard HUD Updater Task
         new BukkitRunnable() {

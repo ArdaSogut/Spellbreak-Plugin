@@ -18,13 +18,13 @@ import java.util.List;
 import java.util.Random;
 
 public class TentaclesAbility implements Ability {
-    private int cooldown = 15;
+    private int cooldown = 12;
     private int manaCost = 35;
     private String requiredClass = "necromancer";
-    private double maxRange = 20.0;
+    private double maxRange = 25.0;
     private double speed = 0.6;
-    private int stunDuration = 80;
-    private double damage = 5.0;
+    private int stunDuration = 25;
+    private double damage = 2.0;
 
     private Color tendrilColor = Color.fromRGB(40, 0, 50);
     private Color tentacleColor = Color.fromRGB(80, 0, 100);

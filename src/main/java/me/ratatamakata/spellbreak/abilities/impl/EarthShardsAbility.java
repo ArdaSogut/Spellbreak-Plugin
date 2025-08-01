@@ -19,7 +19,7 @@ import java.util.*;
 
 public class EarthShardsAbility implements Ability {
     // === Configurable parameters ===
-    private int cooldown = 15;             // seconds
+    private int cooldown = 10;             // seconds
     private int manaCost = 40;
     private String requiredClass = "elementalist";
 
@@ -28,9 +28,9 @@ public class EarthShardsAbility implements Ability {
     private int gatherIntervalTicks = 10;  // ticks between gathering each shard
     private double orbitRadius = 2.0;      // base orbit radius
     private double orbitSpeed = 0.15;      // radians per tick they advance
-    private int durationTicks = 100;       // how long shards continue orbit after sneak release (≈5s)
-    private double shootSpeed = 1.6;       // base velocity multiplier when shooting
-    private double damage = 1.0;           // damage dealt per shard
+    private int durationTicks = 1000;       // how long shards continue orbit after sneak release (≈5s)
+    private double shootSpeed = 1.75;       // base velocity multiplier when shooting
+    private double damage = 1.5;           // damage dealt per shard
     private int restoreDelayTicks = 20;    // delay before restoring blocks after slot change
 
     // A set of “earthbendable” materials (expanded)

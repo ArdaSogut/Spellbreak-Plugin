@@ -21,15 +21,15 @@ import java.util.function.Predicate; // Added for rayTraceEntities filter
 import java.util.stream.Collectors;
 
 public class LightCageAbility implements Ability {
-    private int cooldown = 12;
+    private int cooldown = 11;
     private int manaCost = 35;
     private String requiredClass = "lightbringer";
     private double projectileSpeed = 1.0; // Speed units per tick
     private double radius = 1.1; // Cage radius and projectile collision radius
     private double height = 3.0; // Cage height
-    private int durationTicks = 60; // Cage duration
+    private int durationTicks = 20; // Cage duration
     private double range = 20.0; // Max projectile travel distance
-    private double initialDamage = 5.0;
+    private double initialDamage = 2.0;
     private double tickDamage = 2.0;
     private final Particle.DustOptions cageParticleOptions = new Particle.DustOptions(Color.fromRGB(255, 223, 0), 1.0f);
     private boolean successfulActivation = false;

@@ -39,7 +39,7 @@ public class BoneChoirAbility implements Ability {
     private double idealCombatDistance = 15.0;
     private double maxEffectiveRange = 15.0;
     private int TENOR_SKILL_COOLDOWN = 40;
-    private int BARITONE_SKILL_COOLDOWN = 160;
+    private int BARITONE_SKILL_COOLDOWN = 100;
     private int BASS_SKILL_COOLDOWN = 120;
     private static final String METADATA_MOB_FULLY_SPAWNED = "BoneChoirFullySpawned";
 
@@ -415,7 +415,7 @@ public class BoneChoirAbility implements Ability {
         new BukkitRunnable() {
             int ticksLived = 0;
             Location currentLoc = from.clone();
-            final double maxProjectileRange = 25.0;
+            final double maxProjectileRange = 15.0;
             final double projectileSpeed = 0.8;
 
             @Override
@@ -499,8 +499,8 @@ public class BoneChoirAbility implements Ability {
         new BukkitRunnable() {
             int ticksLived = 0;
             Location currentLoc = from.clone();
-            final double maxProjectileRange = 25.0;
-            final double projectileSpeed = 0.8;
+            final double maxProjectileRange = 20.0;
+            final double projectileSpeed = 0.6 ;
 
             @Override
             public void run() {
@@ -524,7 +524,7 @@ public class BoneChoirAbility implements Ability {
                             LivingEntity livingTarget = (LivingEntity) tgt;
 
                             // ─────── VANILLA BUKKIT DAMAGE ───────
-                            livingTarget.damage(8.0, self);
+                            livingTarget.damage(2.0, self);
 
                             Location impactLoc = livingTarget.getLocation().add(0, livingTarget.getHeight() / 2, 0);
                             impactLoc.getWorld().spawnParticle(Particle.ENCHANTED_HIT, impactLoc, 25, 0.4, 0.4, 0.4, 0.2);
@@ -561,6 +561,7 @@ public class BoneChoirAbility implements Ability {
         e.getWorld().playSound(mobLoc, Sound.BLOCK_BELL_USE, 1.0f, 0.7f);
         e.getWorld().playSound(mobLoc, Sound.ENTITY_ZOMBIE_VILLAGER_CURE, 0.8f, 1.5f);
 
+        // Particle effect task remains the same
         new BukkitRunnable() {
             int ticks = 0;
             @Override
@@ -576,13 +577,56 @@ public class BoneChoirAbility implements Ability {
             }
         }.runTaskTimer(Spellbreak.getInstance(), 0L, 1L);
 
+        // Track healed entities to prevent multiple heals
+        Set<UUID> healedEntities = new HashSet<>();
+        final double HEAL_AMOUNT = 1.0; // 0.5 hearts = 1 health point
+
         new BukkitRunnable() {
             double currentRadius = 0.5;
-            final double maxHealRadius = 8.0;
+            final double maxHealRadius = 5.0;
             final UUID casterId = caster.getUniqueId();
 
             @Override
             public void run() {
+                // Only apply healing once when radius reaches max
+                if (currentRadius >= maxHealRadius) {
+                    Collection<Entity> nearbyEntities = mobLoc.getWorld().getNearbyEntities(
+                            mobLoc,
+                            currentRadius,
+                            currentRadius,
+                            currentRadius
+                    );
+
+                    for (Entity nearbyEnt : nearbyEntities) {
+                        if (!(nearbyEnt instanceof LivingEntity)) continue;
+                        LivingEntity le = (LivingEntity) nearbyEnt;
+                        UUID entityId = le.getUniqueId();
+
+                        // Skip if already healed this cast
+                        if (healedEntities.contains(entityId)) continue;
+
+                        boolean isCaster = entityId.equals(casterId);
+                        boolean isChoirMember = choir.stream()
+                                .map(activeMob -> activeMob.getEntity().getBukkitEntity().getUniqueId())
+                                .anyMatch(uuid -> uuid.equals(entityId));
+
+                        if (isCaster || isChoirMember) {
+                            if (le.getHealth() < le.getMaxHealth()) {
+                                // Apply single heal of 0.5 hearts
+                                le.setHealth(Math.min(le.getHealth() + HEAL_AMOUNT, le.getMaxHealth()));
+                                Location healedLoc = le.getLocation().add(0, le.getHeight() * 0.75, 0);
+                                healedLoc.getWorld().spawnParticle(Particle.HEART, healedLoc, 2, 0.3, 0.3, 0.3, 0.01);
+
+                                // Mark as healed
+                                healedEntities.add(entityId);
+                            }
+                        }
+                    }
+                    cancel();
+                    return;
+                }
+
+                // Visual effects only below this point
                 for (int i = 0; i < 24; i++) {
                     double angle = Math.toRadians(i * (360.0 / 24.0));
                     Location particleLoc = mobLoc.clone().add(
@@ -602,35 +646,7 @@ public class BoneChoirAbility implements Ability {
                     }
                 }
 
-                if (currentRadius >= 2.0) {
-                    Collection<Entity> nearbyEntities = mobLoc.getWorld().getNearbyEntities(
-                            mobLoc,
-                            currentRadius,
-                            currentRadius,
-                            currentRadius
-                    );
-                    for (Entity nearbyEnt : nearbyEntities) {
-                        if (!(nearbyEnt instanceof LivingEntity)) continue;
-                        LivingEntity le = (LivingEntity) nearbyEnt;
-
-                        boolean isCaster = le.getUniqueId().equals(casterId);
-                        boolean isChoirMember = choir.stream()
-                                .map(activeMob -> activeMob.getEntity().getBukkitEntity())
-                                .anyMatch(ent -> ent.equals(le) && !le.equals(e));
-
-                        if (isCaster || isChoirMember) {
-                            if (le.getHealth() < le.getMaxHealth()) {
-                                le.setHealth(Math.min(le.getHealth() + 2.0, le.getMaxHealth()));
-                                Location healedLoc = le.getLocation().add(0, le.getHeight() * 0.75, 0);
-                                healedLoc.getWorld().spawnParticle(Particle.HEART, healedLoc, 2, 0.3, 0.3, 0.3, 0.01);
-                            }
-                        }
-                    }
-                }
-
-                if ((currentRadius += 0.4) > maxHealRadius) {
-                    cancel();
-                }
+                currentRadius += 0.4;
             }
         }.runTaskTimer(Spellbreak.getInstance(), 0L, 1L);
     }

@@ -22,8 +22,8 @@ public class EchoPulseAbility implements Ability {
     private String requiredClass = "mindshaper";
     private double baseRange = 10.0;
     private double baseConeAngle = 55.0;
-    private double baseDamage = 5.5;
-    private int baseDelayTicks = 25;
+    private double baseDamage = 3.0;
+    private int baseDelayTicks = 15;
 
     private final Particle.DustOptions[] waveParticles = {
             new Particle.DustOptions(Color.fromRGB(255, 100, 220), 2.5f),

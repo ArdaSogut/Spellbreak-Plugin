@@ -23,16 +23,16 @@ public class UndyingRageAbility implements Ability {
 
     private String name = "UndyingRage";
     private String description = "Double your max health, which then decays. Damaging enemies restores health. Unleash an explosion when bonus health is lost or duration ends.";
-    private int cooldown = 30; // seconds
-    private int manaCost = 100;
+    private int cooldown = 50; // seconds
+    private int manaCost = 10;
     private String requiredClass = "necromancer"; // Or any class, or none
 
-    private int durationSeconds = 20;
-    private double healthDecayPerSecond = 2.0; // 1 heart per second
+    private int durationSeconds = 15;
+    private double healthDecayPerSecond = 3.0; // 1 heart per second
     private double explosionRadius = 5.0;
     private double explosionDamage = 15.0;
     private double explosionKnockbackPower = 1.5;
-    private double healOnHitPercentage = 0.25; // 25% of damage dealt is healed
+    private double healOnHitPercentage = 0.5; // 25% of damage dealt is healed
 
     public static final String ACTIVE_METADATA_KEY = "UndyingRageActive";
     public static final String EXPIRY_METADATA_KEY = "UndyingRageExpiry";
@@ -63,13 +63,13 @@ public class UndyingRageAbility implements Ability {
     public void loadConfig() {
         FileConfiguration cfg = plugin.getConfig();
         String path = "abilities.undyingrage.";
-        cooldown = cfg.getInt(path + "cooldown", 20);
-        manaCost = cfg.getInt(path + "mana-cost", 100);
+        cooldown = cfg.getInt(path + "cooldown", 50);
+        manaCost = cfg.getInt(path + "mana-cost", 20);
         requiredClass = cfg.getString(path + "required-class", "necromancer");
-        durationSeconds = cfg.getInt(path + "duration-seconds", 20);
+        durationSeconds = cfg.getInt(path + "duration-seconds", 15);
         healthDecayPerSecond = cfg.getDouble(path + "health-decay-per-second", 3.0);
         explosionRadius = cfg.getDouble(path + "explosion.radius", 5.0);
-        explosionDamage = cfg.getDouble(path + "explosion.damage", 4.0);
+        explosionDamage = cfg.getDouble(path + "explosion.damage", 2.0);
         explosionKnockbackPower = cfg.getDouble(path + "explosion.knockback-power", 1.5);
         healOnHitPercentage = cfg.getDouble(path + "heal-on-hit-percentage", 0.5);
 

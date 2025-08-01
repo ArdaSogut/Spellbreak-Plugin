@@ -16,14 +16,14 @@ import java.util.*;
 
 public class GaleVortexAbility implements Ability {
     // Configuration values
-    private int cooldown = 15;
+    private int cooldown = 9;
     private int manaCost = 30;
     private String requiredClass = "elementalist";
-    private double radius = 2.0;
-    private double damage = 1.0;
+    private double radius = 1.7;
+    private double damage = 2.0;
     private double basePullStrength = 1.7;
-    private double forwardSpeed = 1.1;
-    private double range = 20.0;
+    private double forwardSpeed = 1.2;
+    private double range = 16.0;
 
     // --- LEVEL-ADJUSTED (OYUNCUYA FAYDA SAĞLAYAN) DEĞİŞKENLER ---
     public int getAdjustedCooldown(Player player) {

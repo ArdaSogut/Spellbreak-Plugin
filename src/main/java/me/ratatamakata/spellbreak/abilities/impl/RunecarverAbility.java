@@ -18,8 +18,8 @@ public class RunecarverAbility implements Ability {
     private int manaCost = 40;
     private String requiredClass = "runesmith";
     private double range = 20.0;
-    private double damage = 3.0;
-    private double speed = 0.7;
+    private double damage = 2.0;
+    private double speed = 0.9;
     private double hitboxRadius = 1.2;
     private double bladeSpacing = 2.7;
     private double bladeHeight = 1.7; // Height above ground for blade center

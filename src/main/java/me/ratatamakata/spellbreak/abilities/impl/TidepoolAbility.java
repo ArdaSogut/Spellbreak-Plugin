@@ -22,13 +22,13 @@ import org.bukkit.util.Vector;
 import java.util.*;
 
 public class TidepoolAbility implements Ability {
-    private int cooldown = 15;
+    private int cooldown = 25;
     private int manaCost = 50;
     private String requiredClass = "elementalist";
     private double radius = 3.0;
-    private int duration = 8;
-    private double damage = 2.0;
-    private double pushStrength = 1.1;
+    private int duration = 7;
+    private double damage = 1.5;
+    private double pushStrength = 1.0;
     private int barrierHeight = 4;
     private final int layerDelay = 4;
     private final Set<UUID> activeCasters = new HashSet<>();

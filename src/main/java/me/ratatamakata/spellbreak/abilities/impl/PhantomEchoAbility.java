@@ -27,10 +27,10 @@ public class PhantomEchoAbility implements Ability {
     private int cooldown = 12;
     private int manaCost = 15;
     private String requiredClass = "mindshaper";
-    private double dashDistance = 20.0;
-    private int cloneDuration = 100; // ticks
-    private int invisDuration = 40; // ticks
-    private double returnDamage = 2.0;
+    private double dashDistance = 15.0;
+    private int cloneDuration = 70; // ticks
+    private int invisDuration = 30; // ticks
+    private double returnDamage = 1.0;
     private double returnDamageRadius = 5.0;
 
     // Track active clones

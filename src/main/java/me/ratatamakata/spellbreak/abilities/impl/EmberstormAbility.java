@@ -15,7 +15,7 @@ import java.util.*;
 
 public class EmberstormAbility implements Ability {
     // Configuration values
-    private int cooldown = 25;
+    private int cooldown = 15;
     private int manaCost = 40;
     private String requiredClass = "elementalist";
     private double radius = 5.0;

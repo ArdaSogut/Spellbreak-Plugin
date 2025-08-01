@@ -17,10 +17,10 @@ public class LifeDrainAbility implements Ability {
     private int cooldown = 12;
     private int manaCost = 30;
     private String requiredClass = "necromancer"; // Lowercase to match config
-    private double drainAmount = 6.0;
+    private double drainAmount = 1.0;
     private boolean success = false;
     private double rayWidth = 2.0; // Wider ray
-    private double range = 15.0;
+    private double range = 10.0;
 
     @Override
     public String getName() { return "LifeDrain"; }
@@ -120,7 +120,7 @@ public class LifeDrainAbility implements Ability {
             @Override
             public void run() {
                 if (index >= path.size()) {
-                    double healAmount = 3.0;
+                    double healAmount = drainAmount/2; // Heal for half the drain amount
                     player.setHealth(Math.min(player.getMaxHealth(), player.getHealth() + healAmount));
                     player.getWorld().playSound(player.getLocation(), Sound.ENTITY_PLAYER_LEVELUP, 1f, 1.5f);
                     cancel();

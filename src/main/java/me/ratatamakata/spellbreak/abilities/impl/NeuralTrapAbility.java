@@ -11,20 +11,20 @@ import org.bukkit.scheduler.BukkitRunnable;
 import org.bukkit.util.RayTraceResult;
 import org.bukkit.util.Vector;
 
-import java.util.ArrayList;
-import java.util.List;
+import java.util.*;
 
 public class NeuralTrapAbility implements Ability {
     private int cooldown = 12;
     private int manaCost = 30;
     private String requiredClass = "mindshaper"; // Lowercase to match config
 
-    private double damagePerThreshold = 2.0;
+    private double damagePerThreshold = 1.0;
     private double blocksPerThreshold = 3.5; // Increased to reduce knockback spam
     private int tickInterval = 15; // Check every second (20 ticks)
     private int durationTicks = 100; // Duration in ticks (4 seconds)
     private double range = 15.0;
     private double arcHeight = 2.5;
+    private double maxTotalDamage = 3.0;
 
     private boolean success = false;
 
@@ -141,12 +141,14 @@ public class NeuralTrapAbility implements Ability {
 
     private void startNeuralTrapEffect(Player caster, LivingEntity target, double adjustedDamagePerThreshold) {
         SpellLevel spellLevel = Spellbreak.getInstance().getLevelManager().getSpellLevel(caster.getUniqueId(), Spellbreak.getInstance().getPlayerDataManager().getPlayerClass(caster.getUniqueId()), "NeuralTrap");
-        int adjustedDurationTicks = durationTicks + (spellLevel.getLevel() * 5); // Increase duration based on level
+        int adjustedDurationTicks = durationTicks + (spellLevel.getLevel() * 5);
+        // Removed damageDone map - not needed for single-target tracking
 
         new BukkitRunnable() {
             Location lastLocation = target.getLocation().clone();
             double movedDistance = 0.0;
             int elapsedTicks = 0;
+            double totalDamageDone = 0.0; // Track cumulative damage for THIS trap
 
             @Override
             public void run() {
@@ -165,35 +167,54 @@ public class NeuralTrapAbility implements Ability {
                 int hits = (int) (movedDistance / blocksPerThreshold);
 
                 if (hits > 0) {
-                    double totalDamage = hits * adjustedDamagePerThreshold;
+                    double damageThisTick = hits * adjustedDamagePerThreshold;
 
-                    // Use custom damage system directly
-                    Spellbreak.getInstance().getAbilityDamage().damage(
-                            target,
-                            totalDamage,
-                            caster,
-                            NeuralTrapAbility.this,  // Pass current ability instance
-                            "movement"               // Damage sub-type
-                    );
+                    // Enforce max total damage cap
+                    if (totalDamageDone + damageThisTick > maxTotalDamage) {
+                        damageThisTick = maxTotalDamage - totalDamageDone;
+                    }
+
+                    // Apply damage if we haven't reached the cap
+                    if (damageThisTick > 0) {
+                        Spellbreak.getInstance().getAbilityDamage().damage(
+                                target,
+                                damageThisTick,
+                                caster,
+                                NeuralTrapAbility.this,
+                                "movement"
+                        );
+
+                        totalDamageDone += damageThisTick; // Update cumulative damage
+
+                        // Effects
+                        target.getWorld().playSound(target.getLocation(),
+                                Sound.ENTITY_PLAYER_HURT, 1f, 1f);
+                        target.getWorld().spawnParticle(
+                                Particle.DUST,
+                                target.getLocation().add(0, 1, 0),
+                                10,
+                                0.3, 0.3, 0.3,
+                                new Particle.DustOptions(Color.fromRGB(255, 182, 193), 1.5f)
+                        );
+                    }
 
                     movedDistance -= hits * blocksPerThreshold;
 
-                    // Effects
-                    target.getWorld().playSound(target.getLocation(),
-                            Sound.ENTITY_PLAYER_HURT, 1f, 1f);
-                    target.getWorld().spawnParticle(
-                            Particle.DUST,
-                            target.getLocation().add(0, 1, 0),
-                            10,
-                            0.3, 0.3, 0.3,
-                            new Particle.DustOptions(Color.fromRGB(255, 182, 193), 1.5f)
-                    );
+                    // Cancel if we reached damage cap
+                    if (totalDamageDone >= maxTotalDamage) {
+                        if (target instanceof Player) {
+                            ((Player) target).sendActionBar("");
+                        }
+                        cancel();
+                        return;
+                    }
                 }
 
                 elapsedTicks += tickInterval;
 
+                // Action bar update
                 if (target instanceof Player) {
-                    int secondsLeft = Math.max(0, (adjustedDurationTicks - elapsedTicks) / 20); // Ensure non-negative
+                    int secondsLeft = Math.max(0, (adjustedDurationTicks - elapsedTicks) / 20);
                     ((Player) target).sendActionBar(ChatColor.LIGHT_PURPLE + "Neural Trap: "
                             + ChatColor.WHITE + secondsLeft + "s");
                 }

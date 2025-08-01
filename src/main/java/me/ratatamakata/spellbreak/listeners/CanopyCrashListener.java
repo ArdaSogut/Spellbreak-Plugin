@@ -37,23 +37,9 @@ public class CanopyCrashListener implements Listener {
                 .getPlayerClass(p.getUniqueId());
         if (!canopyCrash.getRequiredClass().equalsIgnoreCase(playerClass)) return;
 
-        // Height check: Calculate height above ground
-        Location playerLoc = p.getLocation();
-        Block blockBelow = playerLoc.getBlock().getRelative(BlockFace.DOWN);
-        int checks = 0; // Limit checks to prevent infinite loops in weird scenarios
-        int maxChecks = (int) (playerLoc.getY() - p.getWorld().getMinHeight()); // Max reasonable checks
+        // Height check using improved method
+        double heightAboveGround = calculateHeightAboveGround(p.getLocation());
 
-        while (!blockBelow.getType().isSolid() && blockBelow.getY() > p.getWorld().getMinHeight() && checks < maxChecks) {
-            blockBelow = blockBelow.getRelative(BlockFace.DOWN);
-            checks++;
-        }
-
-        double heightAboveGround = -1;
-        if (blockBelow.getType().isSolid()) {
-             heightAboveGround = playerLoc.getY() - blockBelow.getY() - 1; // -1 because blockBelow is the solid block, feet are 1 block above its base Y
-        }
-
-        // Check if calculated height is sufficient
         if (heightAboveGround < 0 || heightAboveGround < canopyCrash.getMinHeight()) {
             p.playSound(p.getLocation(), Sound.BLOCK_NOTE_BLOCK_DIDGERIDOO, 1f, 0.5f);
             p.sendMessage(ChatColor.YELLOW + "Not high enough above ground for Canopy Crash! (Need " + canopyCrash.getMinHeight() + " blocks)");
@@ -79,30 +65,34 @@ public class CanopyCrashListener implements Listener {
         // All checks passed - activate
         canopyCrash.activate(p);
 
-        // Double-check height before setting cooldown, just in case
-        // Recalculate height here too for absolute certainty (or trust the initial check)
-        Location currentLoc = p.getLocation();
-        Block currentBlockBelow = currentLoc.getBlock().getRelative(BlockFace.DOWN);
-        int currentChecks = 0;
-        int currentMaxChecks = (int) (currentLoc.getY() - p.getWorld().getMinHeight());
-
-        while (!currentBlockBelow.getType().isSolid() && currentBlockBelow.getY() > p.getWorld().getMinHeight() && currentChecks < currentMaxChecks) {
-            currentBlockBelow = currentBlockBelow.getRelative(BlockFace.DOWN);
-            currentChecks++;
-        }
-
-        double currentHeightAboveGround = -1;
-         if (currentBlockBelow.getType().isSolid()) {
-             currentHeightAboveGround = currentLoc.getY() - currentBlockBelow.getY() - 1;
-         }
-
-        // Use the recalculated height for the cooldown check
-        if (currentHeightAboveGround >= canopyCrash.getMinHeight()) {
-            Spellbreak.getInstance().getCooldownManager()
+        // Set cooldown (no need for double-checking height here since activate() handles it)
+        Spellbreak.getInstance().getCooldownManager()
                 .setCooldown(p, canopyCrash.getName(), canopyCrash.getCooldown());
-        }
 
         // Success feedback
         p.playSound(p.getLocation(), Sound.ENTITY_RAVAGER_ROAR, 0.8f, 1.5f);
+    }
+
+    // Add this helper method to CanopyCrashListener class:
+    private double calculateHeightAboveGround(Location location) {
+        Block blockBelow = location.getBlock().getRelative(BlockFace.DOWN);
+        int depth = 0;
+        int maxDepth = 256;
+        int worldMinHeight = location.getWorld().getMinHeight(); // Handles negative Y worlds properly
+
+        // Search downward until we find solid ground or hit world bottom
+        while (!blockBelow.getType().isSolid() &&
+                blockBelow.getY() >= worldMinHeight &&
+                depth++ < maxDepth) {
+            blockBelow = blockBelow.getRelative(BlockFace.DOWN);
+        }
+
+        // If we found solid ground, calculate height
+        if (blockBelow.getType().isSolid()) {
+            return location.getY() - blockBelow.getY() - 1;
+        }
+
+        // If no solid ground found, return -1 to indicate failure
+        return -1;
     }
 }
