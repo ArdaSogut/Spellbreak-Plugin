@@ -15,11 +15,11 @@ import java.util.Set;
 import java.util.UUID;
 
 public class CanopyCrashAbility implements Ability {
-    private int cooldown = 12;
+    private int cooldown = 10;
     private int manaCost = 25;
     private String requiredClass = "archdruid";
     private double damage = 2.0;
-    private double radius = 5.0;
+    private double radius = 7.0;
     private double verticalKnockback = 0.8;
     private double horizontalKnockback = 1.2;
     private int particleCount = 30;

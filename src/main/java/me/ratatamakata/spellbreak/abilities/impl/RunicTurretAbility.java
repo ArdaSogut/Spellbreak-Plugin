@@ -22,7 +22,7 @@ import org.bukkit.util.Vector;
 import java.util.*;
 
 public class RunicTurretAbility implements Ability, Listener {
-    private int cooldown = 25;
+    private int cooldown = 21;
     private int manaCost = 60;
     private String requiredClass = "runesmith";
     private double damageBase = 1.0;

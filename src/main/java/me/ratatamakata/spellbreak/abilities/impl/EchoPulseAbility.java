@@ -17,7 +17,7 @@ import java.util.stream.Collectors;
 
 public class EchoPulseAbility implements Ability {
     // Base values (Level 1)
-    private int baseCooldown = 12;
+    private int baseCooldown = 10;
     private int baseManaCost = 35;
     private String requiredClass = "mindshaper";
     private double baseRange = 10.0;

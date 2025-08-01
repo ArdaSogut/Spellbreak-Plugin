@@ -14,7 +14,7 @@ import org.bukkit.util.Vector;
 import java.util.*;
 
 public class RunecarverAbility implements Ability {
-    private int cooldown = 10;
+    private int cooldown = 9;
     private int manaCost = 40;
     private String requiredClass = "runesmith";
     private double range = 20.0;

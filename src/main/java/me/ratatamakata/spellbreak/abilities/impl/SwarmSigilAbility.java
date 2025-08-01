@@ -16,7 +16,7 @@ import java.util.concurrent.ThreadLocalRandom;
 
 public class SwarmSigilAbility implements Ability {
 
-    private int cooldown = 18;
+    private int cooldown = 15;
     private int manaCost = 60;
     private String requiredClass = "runesmith";
     private int minDrones = 2;

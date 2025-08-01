@@ -21,7 +21,7 @@ import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
 public class PlagueCloudAbility implements Ability {
-    private int cooldown = 20;
+    private int cooldown = 17;
     private int manaCost = 40;
     private String requiredClass = "necromancer";
     private double maxRadius = 15.0;
@@ -439,13 +439,6 @@ public class PlagueCloudAbility implements Ability {
         private void applyVisualEffects(LivingEntity target) {
             target.addPotionEffect(new PotionEffect(
                     PotionEffectType.SLOWNESS,
-                    40,
-                    0,
-                    true,
-                    true
-            ));
-            target.addPotionEffect(new PotionEffect(
-                    PotionEffectType.BLINDNESS,
                     40,
                     0,
                     true,

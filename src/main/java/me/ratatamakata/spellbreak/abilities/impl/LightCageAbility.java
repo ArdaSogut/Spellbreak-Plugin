@@ -21,7 +21,7 @@ import java.util.function.Predicate; // Added for rayTraceEntities filter
 import java.util.stream.Collectors;
 
 public class LightCageAbility implements Ability {
-    private int cooldown = 11;
+    private int cooldown = 9;
     private int manaCost = 35;
     private String requiredClass = "lightbringer";
     private double projectileSpeed = 1.0; // Speed units per tick

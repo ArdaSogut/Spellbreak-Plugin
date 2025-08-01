@@ -34,21 +34,23 @@ public class NeuralTrapListener implements Listener {
                 .getAbilityManager().getAbilityByName(abilityName);
         if (ability == null) return;
 
-        SpellLevel spellLevel = Spellbreak.getInstance().getLevelManager().getSpellLevel(p.getUniqueId(), Spellbreak.getInstance().getPlayerDataManager().getPlayerClass(p.getUniqueId()), "NeuralTrap");
+        SpellLevel spellLevel = Spellbreak.getInstance().getLevelManager()
+                .getSpellLevel(p.getUniqueId(), pdm.getPlayerClass(p.getUniqueId()), abilityName);
         int adjustedCooldown = (int) (ability.getCooldown() * spellLevel.getCooldownReduction());
+
         if (cd.isOnCooldown(p, abilityName)) {
             p.sendMessage(ChatColor.RED + "Neural Trap on cooldown: "
                     + cd.getRemainingCooldown(p, abilityName) + "s");
             return;
         }
 
-        if (!mana.consumeMana(p, ability.getManaCost())) {
-            p.sendMessage(ChatColor.RED + "Not enough mana for Neural Trap!");
-            return;
+        // Attempt to activate the ability, which handles mana check internally
+        ability.activate(p);
+
+        // Only apply cooldown if activation was successful
+        if (ability.isSuccessful()) {
+            cd.setCooldown(p, abilityName, adjustedCooldown);
         }
 
-        // Activate the ability
-        ability.activate(p);
-        cd.setCooldown(p, abilityName, adjustedCooldown);
     }
 }

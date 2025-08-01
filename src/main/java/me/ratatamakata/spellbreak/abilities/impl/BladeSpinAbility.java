@@ -19,7 +19,7 @@ import java.util.UUID;
 
 public class BladeSpinAbility implements Ability {
 
-    private int cooldown = 18;
+    private int cooldown = 15;
     private int manaCost = 50;
     private String requiredClass = "runesmith";
     private double duration = 5.0;

@@ -13,7 +13,7 @@ import java.util.*;
 
 public class WardingSigilAbility implements Ability {
     // Configuration values
-    private int cooldown = 30;
+    private int cooldown = 26;
     private int manaCost = 35;
     private String requiredClass = "runesmith";
     private int chargeTime = 40; // 1 second (20 ticks)

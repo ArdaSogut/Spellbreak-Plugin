@@ -23,7 +23,7 @@ public class UndyingRageAbility implements Ability {
 
     private String name = "UndyingRage";
     private String description = "Double your max health, which then decays. Damaging enemies restores health. Unleash an explosion when bonus health is lost or duration ends.";
-    private int cooldown = 50; // seconds
+    private int cooldown = 44; // seconds
     private int manaCost = 10;
     private String requiredClass = "necromancer"; // Or any class, or none
 
@@ -32,7 +32,7 @@ public class UndyingRageAbility implements Ability {
     private double explosionRadius = 5.0;
     private double explosionDamage = 15.0;
     private double explosionKnockbackPower = 1.5;
-    private double healOnHitPercentage = 0.5; // 25% of damage dealt is healed
+    private double healOnHitPercentage = 0.3; // 25% of damage dealt is healed
 
     public static final String ACTIVE_METADATA_KEY = "UndyingRageActive";
     public static final String EXPIRY_METADATA_KEY = "UndyingRageExpiry";
@@ -71,7 +71,7 @@ public class UndyingRageAbility implements Ability {
         explosionRadius = cfg.getDouble(path + "explosion.radius", 5.0);
         explosionDamage = cfg.getDouble(path + "explosion.damage", 2.0);
         explosionKnockbackPower = cfg.getDouble(path + "explosion.knockback-power", 1.5);
-        healOnHitPercentage = cfg.getDouble(path + "heal-on-hit-percentage", 0.5);
+        healOnHitPercentage = cfg.getDouble(path + "heal-on-hit-percentage", 0.3);
 
         // Update description with loaded values if desired, or keep static
         double typicalBonusHealth = getAugmentedHealthBonus(20.0);

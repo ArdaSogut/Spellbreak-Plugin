@@ -25,7 +25,7 @@ public class RunicJumpPadAbility implements Ability {
     private int manaCost = 40;
     private String requiredClass = "runesmith";
     private int maxCharges = 2; // Maximum number of charges
-    private int chargeRegenSeconds = 8; // Time to regenerate a charge
+    private int chargeRegenSeconds = 6; // Time to regenerate a charge
     private double radius = 4.0; // Radius of the pad
     private int buildTicks = 9; // Time to build the pad
     private int activeTicks = 80; // Duration of pad activation

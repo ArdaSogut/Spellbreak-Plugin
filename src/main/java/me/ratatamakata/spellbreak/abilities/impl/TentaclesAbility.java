@@ -18,7 +18,7 @@ import java.util.List;
 import java.util.Random;
 
 public class TentaclesAbility implements Ability {
-    private int cooldown = 12;
+    private int cooldown = 10;
     private int manaCost = 35;
     private String requiredClass = "necromancer";
     private double maxRange = 25.0;

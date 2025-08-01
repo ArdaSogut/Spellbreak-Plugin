@@ -26,7 +26,7 @@ public class PurifyingPrismAbility implements Ability {
 
     private String name = "PurifyingPrism";
     private String description = "Deploys a rotating prism above the caster that shoots damaging rays at foes.";
-    private int cooldown = 25;
+    private int cooldown = 21;
     private int manaCost = 50;
     private String requiredClass = "lightbringer";
 

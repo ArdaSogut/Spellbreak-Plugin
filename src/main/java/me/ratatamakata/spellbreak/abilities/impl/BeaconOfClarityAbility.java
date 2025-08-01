@@ -21,7 +21,7 @@ import java.util.concurrent.ConcurrentHashMap;
 public class BeaconOfClarityAbility implements Ability {
     private String name = "BeaconOfClarity";
     private String description = "Deploys a beacon that periodically heals nearby allies.";
-    private int cooldown = 25;
+    private int cooldown = 21;
     private int manaCost = 25;
     private String requiredClass = "lightbringer";
 

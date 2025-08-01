@@ -16,7 +16,7 @@ import java.util.UUID;
 public class RadiantPhaseAbility implements Ability {
     private String name = "RadiantPhase";
     private String description = "Become pure light: immune and sped for a short time.";
-    private int cooldown = 20; // seconds
+    private int cooldown = 17; // seconds
     private int manaCost = 40;
     private String requiredClass = "lightbringer";
     private int durationTicks = 20 * 5; // 5 seconds

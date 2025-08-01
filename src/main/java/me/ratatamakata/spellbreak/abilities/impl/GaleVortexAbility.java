@@ -16,7 +16,7 @@ import java.util.*;
 
 public class GaleVortexAbility implements Ability {
     // Configuration values
-    private int cooldown = 9;
+    private int cooldown = 8;
     private int manaCost = 30;
     private String requiredClass = "elementalist";
     private double radius = 1.7;

@@ -20,11 +20,11 @@ import java.util.concurrent.ConcurrentHashMap;
 public class ShadowCreaturesAbility implements Ability {
     private String name = "ShadowCreatures";
     private String description = "Summon two shadowy orbs that attack enemies in a dash, giving them a chance to dodge";
-    private int cooldown = 25;
+    private int cooldown = 21;
     private int manaCost = 60;
     private String requiredClass = "mindshaper";
     private int chargeTime = 10;
-    private int duration = 20 * 5;
+    private int duration = 20 * 12;
     private double attackRange = 8.0;
     private int damage = 1;
     private double orbDistance = 2.0;

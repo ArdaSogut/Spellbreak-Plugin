@@ -20,7 +20,7 @@ public class RadiantDashAbility implements Ability {
 
     private String name = "RadiantDash";
     private String description = "Spread your radiant wings and take flight, purging negative effects.";
-    private int cooldown = 12;
+    private int cooldown = 9;
     private int manaCost = 25;
     private String requiredClass = "lightbringer";
     private double flightSpeed = 0.8;

@@ -19,7 +19,7 @@ import java.util.*;
 
 public class MistDashAbility implements Ability, Listener {
 
-    private int cooldown = 13;
+    private int cooldown = 11;
     private int manaCost = 50;
     private String requiredClass = "necromancer";
     private int durationTicks = 20 * 3;

@@ -22,7 +22,7 @@ import org.bukkit.util.Vector;
 import java.util.*;
 
 public class TidepoolAbility implements Ability {
-    private int cooldown = 25;
+    private int cooldown = 21;
     private int manaCost = 50;
     private String requiredClass = "elementalist";
     private double radius = 3.0;

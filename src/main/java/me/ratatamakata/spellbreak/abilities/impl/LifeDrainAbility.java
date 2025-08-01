@@ -14,7 +14,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class LifeDrainAbility implements Ability {
-    private int cooldown = 12;
+    private int cooldown = 10;
     private int manaCost = 30;
     private String requiredClass = "necromancer"; // Lowercase to match config
     private double drainAmount = 1.0;

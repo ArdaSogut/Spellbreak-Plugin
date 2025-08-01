@@ -21,7 +21,7 @@ import java.util.*;
 public class DreamwalkerAbility implements Ability {
     private String name = "Dreamwalker";
     private String description = "Phase through reality while anchored to your starting elevation";
-    private int cooldown = 25;
+    private int cooldown = 21;
     private int manaCost = 50;
     private String requiredClass = "mindshaper";
     private int durationTicks = 20 * 4;

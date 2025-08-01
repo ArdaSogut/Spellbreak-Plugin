@@ -37,8 +37,8 @@ public class NatureStepAbility implements Ability {
     private int manaCost = 15;
     private String requiredClass = "archdruid";
     private int maxCharges = 3;
-    private int chargeRegenSeconds = 5; // Cooldown per charge
-    private double dashDistance = 8.0; // Increased default range again
+    private int chargeRegenSeconds = 4; // Cooldown per charge
+    private double dashDistance = 10.0; // Increased default range again
     private long internalCooldownMillis = 200; // 0.2 seconds between dashes
     // Orb Config
     private boolean orbEnabled = true;
@@ -115,7 +115,7 @@ public class NatureStepAbility implements Ability {
         maxCharges = cfg.getInt(path + "max-charges", maxCharges);
         chargeRegenSeconds = cfg.getInt(path + "charge-regen-seconds", chargeRegenSeconds);
         // Ensure config loading respects the new default
-        dashDistance = cfg.getDouble(path + "dash-distance", 8.0);
+        dashDistance = cfg.getDouble(path + "dash-distance", 10.0);
         internalCooldownMillis = cfg.getLong(path + "internal-cooldown-millis", 200); // Allow config override
         
         // Load Orb Config

@@ -14,7 +14,7 @@ import org.bukkit.util.Vector;
 import java.util.*;
 
 public class NeuralTrapAbility implements Ability {
-    private int cooldown = 12;
+    private int cooldown = 10;
     private int manaCost = 30;
     private String requiredClass = "mindshaper"; // Lowercase to match config
 

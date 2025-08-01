@@ -44,7 +44,7 @@ public class AmbushSlashAbility implements Ability {
     private String description = "Stage 1: Fire a Marking Shot. Stage 2: Teleport behind the marked target and slash.";
     private int manaCost = 30;
     private String requiredClass = "archdruid";
-    private int cooldown = 11;
+    private int cooldown = 9;
     private double stage1Damage = 1.0D;
     private double stage2Damage = 1.0D;
     private int markDurationTicks = 50;
@@ -52,9 +52,9 @@ public class AmbushSlashAbility implements Ability {
     private int natureBurnAmplifier = 0;
     private double natureBurnSpreadRadius = 3.0D;
     private double teleportOffset = 1.5D;
-    private double blastRange = 16.0D;
-    private double blastCheckRadius = 1.0D;
-    private double projectileSpeed = 5.0D;
+    private double blastRange = 20.0D;
+    private double blastCheckRadius = 1.2D;
+    private double projectileSpeed = 6.0D;
     private String targetIndicatorParticle = "DUST";
     private Color targetIndicatorColor = Color.fromRGB(180, 0, 255);
     private float targetIndicatorSize = 1.0F;

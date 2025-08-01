@@ -15,7 +15,7 @@ import java.util.stream.Collectors;
 
 public class ConsecrationAbility implements Ability {
 
-    private int cooldown = 13; // Adjusted default cooldown
+    private int cooldown = 11; // Adjusted default cooldown
     private int manaCost = 60; // Adjusted default mana cost
     private String requiredClass = "lightbringer";
     private double damageAmount = 3.0; // Damage on slam

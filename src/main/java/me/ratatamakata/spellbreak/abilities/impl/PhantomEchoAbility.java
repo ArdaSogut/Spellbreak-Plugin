@@ -24,7 +24,7 @@ import java.util.Map;
 import java.util.UUID;
 
 public class PhantomEchoAbility implements Ability {
-    private int cooldown = 12;
+    private int cooldown = 10;
     private int manaCost = 15;
     private String requiredClass = "mindshaper";
     private double dashDistance = 15.0;

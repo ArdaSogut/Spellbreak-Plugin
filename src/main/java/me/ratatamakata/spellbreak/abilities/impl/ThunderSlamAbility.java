@@ -29,7 +29,7 @@ import org.bukkit.scheduler.BukkitRunnable;
 import org.bukkit.util.Vector;
 
 public class ThunderSlamAbility implements Ability {
-    private int cooldown = 16;
+    private int cooldown = 13;
     private int manaCost = 80;
     private String requiredClass = "elementalist";
     private double damage = 3.0D;

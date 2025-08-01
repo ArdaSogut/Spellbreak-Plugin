@@ -13,7 +13,7 @@ import org.bukkit.util.Vector;
 import java.util.*;
 
 public class SporeBlossomAbility implements Ability {
-    private int cooldown = 12;
+    private int cooldown = 10;
     private int manaCost = 35;
     private String requiredClass = "archdruid";
     private double radius = 5.0;

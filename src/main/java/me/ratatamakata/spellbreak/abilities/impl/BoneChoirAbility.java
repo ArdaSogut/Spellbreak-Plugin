@@ -32,7 +32,7 @@ public class BoneChoirAbility implements Ability {
     private final Map<UUID, Map<String, Long>> skillCooldowns = new HashMap<>();
     private final Map<UUID, Map<Entity, MovementState>> mobMovementStates = new HashMap<>();
 
-    private int cooldown = 45;
+    private int cooldown = 40;
     private int duration = 30;
     private double formationRadius = 4.0;
     private double hardTeleportThreshold = 25;

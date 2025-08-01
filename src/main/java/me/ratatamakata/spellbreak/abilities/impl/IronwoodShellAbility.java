@@ -20,7 +20,7 @@ public class IronwoodShellAbility implements Ability {
     private String description = "Gain bark armor absorbing damage and reflecting portion to attackers";
     private int manaCost = 40;
     private String requiredClass = "archdruid";
-    private int cooldownSeconds = 30;
+    private int cooldownSeconds = 26;
     private int durationSeconds = 8;
     private double damageAbsorption = 0.5;
     private double damageReflection = 0.2;

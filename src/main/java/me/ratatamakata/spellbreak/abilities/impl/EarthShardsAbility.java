@@ -19,7 +19,7 @@ import java.util.*;
 
 public class EarthShardsAbility implements Ability {
     // === Configurable parameters ===
-    private int cooldown = 10;             // seconds
+    private int cooldown = 9;             // seconds
     private int manaCost = 40;
     private String requiredClass = "elementalist";
 

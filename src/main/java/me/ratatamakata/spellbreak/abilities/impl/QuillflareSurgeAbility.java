@@ -28,7 +28,7 @@ public class QuillflareSurgeAbility implements Ability {
     private String description = "Leap upward and release tracking quills that damage enemies.";
     private int manaCost = 35;
     private String requiredClass = "archdruid";
-    private int cooldownSeconds = 13;
+    private int cooldownSeconds = 10;
     private double leapPower = 0.8;
     private int quillCount = 8;
     private double quillDamage = 1.0;
