@@ -30,7 +30,7 @@ public class EarthShardsAbility implements Ability {
     private double orbitSpeed = 0.15;      // radians per tick they advance
     private int durationTicks = 1000;       // how long shards continue orbit after sneak release (≈5s)
     private double shootSpeed = 1.75;       // base velocity multiplier when shooting
-    private double damage = 1.5;           // damage dealt per shard
+    private double damage = 2;           // damage dealt per shard
     private int restoreDelayTicks = 20;    // delay before restoring blocks after slot change
 
     // A set of “earthbendable” materials (expanded)

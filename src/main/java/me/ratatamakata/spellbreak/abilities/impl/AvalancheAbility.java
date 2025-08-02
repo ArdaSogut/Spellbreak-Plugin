@@ -22,10 +22,10 @@ public class AvalancheAbility implements Ability {
     private double maxRadius = 2.2;
     private double initialSpeed = 0.5;
     private double speedGain = 1.0;
-    private double maxSpeed = 0.9;
+    private double maxSpeed = 1.0;
     private double damage = 1.0;
     private double knockbackStrength = 1.5;
-    private int maxDuration = 30;
+    private int maxDuration = 45;
     private double growthRate = 0.05;
     private int hitCooldownTicks = 20;
 

@@ -111,7 +111,7 @@ public class ThunderSlamAbility implements Ability {
         originalFlySpeeds.put(player.getUniqueId(), player.getFlySpeed());
         player.setAllowFlight(true);
         player.setFlying(true);
-        player.setFlySpeed(0.05f);
+        player.setFlySpeed(0.085f);
         double currentY = player.getLocation().getY();
         double launchStrength = Math.max(0.8D, (flightY - currentY) * 0.15D);
         player.setVelocity(new Vector(0.0D, launchStrength, 0.0D));

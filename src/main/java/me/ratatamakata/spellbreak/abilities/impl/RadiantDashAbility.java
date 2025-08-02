@@ -97,7 +97,6 @@ public class RadiantDashAbility implements Ability {
         player.setFlying(true);
 
         player.getWorld().playSound(player.getLocation(), Sound.ENTITY_PLAYER_SPLASH, .8f, 1.5f);
-        player.getWorld().playSound(player.getLocation(), Sound.ITEM_ELYTRA_FLYING,  1f, 1.2f);
 
         if (negateDebuffs) {
             for (PotionEffect e : player.getActivePotionEffects()) {

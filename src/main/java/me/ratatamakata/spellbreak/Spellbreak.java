@@ -95,7 +95,6 @@ public final class Spellbreak extends JavaPlugin implements Listener {
         getServer().getPluginManager().registerEvents(stunHandler, this);
         getServer().getPluginManager().registerEvents(new BoneChoirListener(), this);
         getServer().getPluginManager().registerEvents(new CustomDeathMessageListener(this), this);
-        getServer().getPluginManager().registerEvents(new UndyingRageListener(this), this);
         getServer().getPluginManager().registerEvents(new NatureStepListener(), this);
         getServer().getPluginManager().registerEvents(new FallDamageListener(), this);
         getServer().getPluginManager().registerEvents(new AmbushSlashListener(this), this);
@@ -131,6 +130,7 @@ public final class Spellbreak extends JavaPlugin implements Listener {
         getServer().getPluginManager().registerEvents(getPlayerDataManager(), this);
         getServer().getPluginManager().registerEvents(new DailiesListener(this), this);
         getServer().getPluginManager().registerEvents(new DailyProgressListener(this), this);
+        getServer().getPluginManager().registerEvents(new UndyingPactListener(), this);
 
 
         getCommand("bind").setExecutor(new BindCommand());

@@ -24,7 +24,7 @@ public class AbilityManager {
         StunHandler stunHandler = plugin.getStunHandler();  // Assuming you have a method in Spellbreak to get StunHandler
         register(new TentaclesAbility(stunHandler));
         register(new BoneChoirAbility());
-        register(new UndyingRageAbility()); // Added new UndyingRage
+        register(new UndyingPactAbility());
 
         // Archdruid abilities
         register(new NatureStepAbility());

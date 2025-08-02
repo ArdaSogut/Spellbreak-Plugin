@@ -26,7 +26,7 @@ public class TidepoolAbility implements Ability {
     private int manaCost = 50;
     private String requiredClass = "elementalist";
     private double radius = 3.0;
-    private int duration = 7;
+    private int duration = 8;
     private double damage = 1.5;
     private double pushStrength = 1.0;
     private int barrierHeight = 4;
