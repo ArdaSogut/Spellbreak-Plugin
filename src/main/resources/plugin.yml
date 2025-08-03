@@ -1,7 +1,9 @@
 name: Spellbreak
-version: 1.0
+version: '${project.version}'
 main: me.ratatamakata.spellbreak.Spellbreak
-api-version: 1.16
+api-version: '1.20'
+authors: [ratatamakata]
+description: A Minecraft plugin that adds magical abilities to the game
 commands:
   bind:
     description: Bind an ability to a hotbar slot
@@ -35,4 +37,15 @@ commands:
     description: Opens your daily missions GUI
     usage: /<command>
     permission: spellbreak.dailies
-    permission-message: You don’t have permission to view daily missions.
+    permission-message: You don't have permission to view daily missions.
+  reload:
+    description: Reloads the Spellbreak configuration
+    usage: /spellbreak reload
+    permission: spellbreak.reload
+    permission-message: You don't have permission to reload the configuration.
+    aliases: [spellbreakreload, sbreload]
+
+permissions:
+  spellbreak.reload:
+    description: Allows reloading the Spellbreak configuration
+    default: op
