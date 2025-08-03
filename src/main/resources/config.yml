@@ -47,3 +47,6 @@ classes:
       - RunicCannon
       - BladeSpin
       - SwarmSigil
+  Starcaller:
+    abilities:
+      - MeteorLash

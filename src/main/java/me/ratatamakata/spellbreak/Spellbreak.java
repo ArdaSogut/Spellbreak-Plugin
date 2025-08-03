@@ -10,6 +10,7 @@ import me.ratatamakata.spellbreak.dailies.DailiesListener;
 import me.ratatamakata.spellbreak.dailies.DailyMissionManager;
 import me.ratatamakata.spellbreak.dailies.DailyProgressListener;
 import me.ratatamakata.spellbreak.listeners.*;
+import me.ratatamakata.spellbreak.listeners.MeteorLashListener;
 import me.ratatamakata.spellbreak.listeners.TidepoolListener;
 import me.ratatamakata.spellbreak.listeners.EmberstormListener;
 import me.ratatamakata.spellbreak.managers.*;
@@ -131,6 +132,7 @@ public final class Spellbreak extends JavaPlugin implements Listener {
         getServer().getPluginManager().registerEvents(new DailiesListener(this), this);
         getServer().getPluginManager().registerEvents(new DailyProgressListener(this), this);
         getServer().getPluginManager().registerEvents(new UndyingPactListener(), this);
+        getServer().getPluginManager().registerEvents(new MeteorLashListener(), this);
 
 
         getCommand("bind").setExecutor(new BindCommand());

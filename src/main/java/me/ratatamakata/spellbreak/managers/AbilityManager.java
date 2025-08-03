@@ -4,6 +4,7 @@ package me.ratatamakata.spellbreak.managers;
 import me.ratatamakata.spellbreak.Spellbreak;
 import me.ratatamakata.spellbreak.abilities.Ability;
 import me.ratatamakata.spellbreak.abilities.impl.*;
+import me.ratatamakata.spellbreak.abilities.impl.MeteorLashAbility;
 import me.ratatamakata.spellbreak.listeners.StunHandler;
 
 import java.util.*;
@@ -66,6 +67,9 @@ public class AbilityManager {
         register(new RunicTurretAbility());
         register(new BladeSpinAbility());
         register(new SwarmSigilAbility());
+
+        // Starcaller abilities
+        register(new MeteorLashAbility());
 
 
         map.values().forEach(Ability::loadConfig);
