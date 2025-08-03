@@ -1,0 +1,52 @@
+classes:
+  Necromancer:
+    abilities:
+      - LifeDrain
+      - PlagueCloud
+      - MistDash
+      - Tentacles
+      - BoneChoir
+      - UndyingPact
+  Archdruid:
+    abilities:
+      - NatureStep
+      - AmbushSlash
+      - SporeBlossom
+      - CanopyCrash
+      - QuillflareSurge
+      - IronwoodShell
+  Lightbringer:
+    abilities:
+      - LightCage
+      - Consecration
+      - PurifyingPrism
+      - RadiantPhase
+      - RadiantDash
+      - BeaconOfClarity
+  Mindshaper:
+    abilities:
+      - EchoPulse
+      - PhantomEcho
+      - NeuralTrap
+      - Dreamwalker
+      - ShadowCreatures
+      - CloneSwarm
+  Elementalist:
+    abilities:
+      - Tidepool
+      - Emberstorm
+      - GaleVortex
+      - EarthShards
+      - Avalanche
+      - ThunderSlam
+  Runesmith:
+    abilities:
+      - WardingSigil
+      - Runecarver
+      - RunicJumpPad
+      - RunicCannon
+      - BladeSpin
+      - SwarmSigil
+  Starcaller:
+    abilities:
+      - MeteorLash

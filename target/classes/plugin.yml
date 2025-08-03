@@ -1,0 +1,51 @@
+name: Spellbreak
+version: '1.0'
+main: me.ratatamakata.spellbreak.Spellbreak
+api-version: '1.20'
+authors: [ratatamakata]
+description: A Minecraft plugin that adds magical abilities to the game
+commands:
+  bind:
+    description: Bind an ability to a hotbar slot
+    usage: /bind <slot 1-9> <ability>
+  class:
+    description: Set your spell class
+    usage: /class <class>
+  cooldownreset:
+    description: Reset cooldowns for a player
+    usage: /cooldownreset [player]
+  testdeath:
+    description: Test death messages for abilities
+    usage: /testdeath <ability> [target]
+  spellbreakcooldownreset:
+    description: Reset cooldowns
+    usage: /spellbreakcooldownreset
+  preset:
+    description: Manage ability binding presets
+    usage: /preset <create|bind> <name>
+    aliases: [presets]
+  team:
+    description: Manages player teams/parties.
+    usage: /<command> [subcommand] [args]
+    aliases: [ party, p ]
+  level:
+    description: View and manage player/spell levels
+    usage: /level [stats|spells|set|give] [args...]
+    permission: spellbreak.level
+    permission-message: You don't have permission to use this command
+  dailies:
+    description: Opens your daily missions GUI
+    usage: /<command>
+    permission: spellbreak.dailies
+    permission-message: You don't have permission to view daily missions.
+  reload:
+    description: Reloads the Spellbreak configuration
+    usage: /spellbreak reload
+    permission: spellbreak.reload
+    permission-message: You don't have permission to reload the configuration.
+    aliases: [spellbreakreload, sbreload]
+
+permissions:
+  spellbreak.reload:
+    description: Allows reloading the Spellbreak configuration
+    default: op

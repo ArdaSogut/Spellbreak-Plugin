@@ -1,0 +1,98 @@
+missions:
+  # KILL-type
+  kill_zombies:
+    type: KILL
+    target: ZOMBIE
+    amount: 10
+    description: "Slay 10 zombies"
+    difficulty: EASY
+    xpReward: 60
+
+  kill_spiders:
+    type: KILL
+    target: SPIDER
+    amount: 8
+    description: "Hunt down 8 spiders"
+    difficulty: EASY
+    xpReward: 70
+
+  kill_ghasts:
+    type: KILL
+    target: GHAST
+    amount: 3
+    description: "Put 3 ghasts to rest"
+    difficulty: HARD
+    xpReward: 250
+
+  # COLLECT-type
+  gather_wool:
+    type: COLLECT
+    material: WHITE_WOOL
+    amount: 12
+    description: "Gather 12 white wool"
+    difficulty: EASY
+    xpReward: 40
+
+  mine_gold:
+    type: COLLECT
+    material: GOLD_ORE
+    amount: 6
+    description: "Mine 6 gold ore"
+    difficulty: MEDIUM
+    xpReward: 140
+
+  fish_salmon:
+    type: COLLECT
+    material: SALMON
+    amount: 5
+    description: "Fish up 5 salmon"
+    difficulty: MEDIUM
+    xpReward: 110
+
+  # VISIT_STRUCTURE-type
+  visit_stronghold:
+    type: VISIT_STRUCTURE
+    structure: STRONGHOLD
+    description: "Enter a stronghold"
+    difficulty: HARD
+    xpReward: 320
+
+  visit_village:
+    type: VISIT_STRUCTURE
+    structure: VILLAGE
+    description: "Discover a village"
+    difficulty: EASY
+    xpReward: 50
+
+  # CRAFT-type
+  craft_beacon:
+    type: CRAFT
+    item: BEACON
+    amount: 1
+    description: "Craft a beacon"
+    difficulty: HARD
+    xpReward: 400
+
+  craft_shield:
+    type: CRAFT
+    item: SHIELD
+    amount: 1
+    description: "Forge a shield"
+    difficulty: MEDIUM
+    xpReward: 150
+
+  # SPECIAL
+  time_sleep:
+    type: SLEEP
+    amount: 1
+    description: "Sleep through the night"
+    difficulty: EASY
+    xpReward: 30
+
+  enchant_item:
+    type: ENCHANT
+    enchantment: SHARPNESS
+    level: 3
+    description: "Enchant an item with Sharpness III"
+    difficulty: MEDIUM
+    xpReward: 180
