@@ -21,16 +21,16 @@ import org.bukkit.util.Vector;
 import java.util.*;
 
 public class MeteorLashAbility implements Ability {
-    private int cooldown = 15;
-    private int manaCost = 50;
+    private int cooldown = 11;
+    private int manaCost = 20;
     private String requiredClass = "starcaller";
     private double damage = 3;
     private double knockbackStrength = 2.0;
     private int meteorDuration = 60;
-    private double meteorSpeed = 1.0;            // reduced speed for gentler launch
+    private double meteorSpeed = 1.7;            // reduced speed for gentler launch
     private int selectionTimeout = 100;
     private int selectionDuration = 100; // How long selection mode lasts
-    private double selectionRange = 50; // Maximum selection range
+    private double selectionRange = 25; // Maximum selection range
     private double impactRadius = 3.5;
     private int particleCount = 30;
 
@@ -129,32 +129,52 @@ public class MeteorLashAbility implements Ability {
 
     private void launchMeteor(Player player, Location target) {
         World w = player.getWorld();
-        // reduced launch height and offset for a gentler approach
         Location start = player.getLocation().add(-8, 20, 0);
         Vector dir = target.toVector().subtract(start.toVector()).normalize();
         double hor = Math.hypot(target.getX()-start.getX(), target.getZ()-start.getZ());
         double vert = start.getY()-target.getY();
         dir.setY(-Math.sin(Math.atan2(vert,hor))).normalize();
         new BukkitRunnable(){
-            Location ctr = start.clone(); int t=0; List<Location> pts=new ArrayList<>();
+            Location ctr = start.clone();
+            int t=0;
+            List<Location> pts = new ArrayList<>();
+
             @Override public void run(){
-                if (t++>=adjustedMeteorDuration || ctr.getY()<=target.getY()){
+                // Remove previous meteor blocks
+                for(Location b : pts) {
+                    if (b.getBlock().getType() == Material.NETHERRACK || b.getBlock().getType() == Material.MAGMA_BLOCK) {
+                        b.getBlock().setType(Material.AIR);
+                    }
+                }
+                pts.clear();
+
+                // Check termination conditions
+                if (t++ >= adjustedMeteorDuration || ctr.getY() <= target.getY()) {
                     List<Location> ip = createImpact(player, ctr);
                     createExplosionEffect(w, ctr, ip);
-                    cancel(); return;
+                    cancel();
+                    return;
                 }
-                for(Location b:pts) if (b.getBlock().getType()==Material.NETHERRACK||b.getBlock().getType()==Material.MAGMA_BLOCK) b.getBlock().setType(Material.AIR);
-                pts.clear(); ctr.add(dir.clone().multiply(adjustedMeteorSpeed)); createMeteorCube(ctr, pts);
-                w.spawnParticle(Particle.FLAME, ctr,8,0.3,0.3,0.3,0.01);
-                w.spawnParticle(Particle.SMOKE, ctr,3,0.2,0.2,0.2,0.01);
-                for(Entity e:w.getNearbyEntities(ctr,2,2,2)) if(e instanceof LivingEntity&&!e.equals(player)){
-                    Vector kb=e.getLocation().toVector().subtract(ctr.toVector()).normalize().multiply(adjustedKnockback*0.5).setY(0.3);
-                    e.setVelocity(kb);
-                    Spellbreak.getInstance().getAbilityDamage().damage((LivingEntity)e, adjustedDamage, player, MeteorLashAbility.this, "MeteorLash");
+
+                // Move meteor and create new blocks
+                ctr.add(dir.clone().multiply(adjustedMeteorSpeed));
+                createMeteorCube(ctr, pts);
+
+                // Particles and entity interactions
+                w.spawnParticle(Particle.FLAME, ctr, 8, 0.3, 0.3, 0.3, 0.01);
+                w.spawnParticle(Particle.SMOKE, ctr, 3, 0.2, 0.2, 0.2, 0.01);
+                for(Entity e : w.getNearbyEntities(ctr, 2, 2, 2)) {
+                    if(e instanceof LivingEntity && !e.equals(player)) {
+                        Vector kb = e.getLocation().toVector().subtract(ctr.toVector())
+                                .normalize().multiply(adjustedKnockback * 0.5).setY(0.3);
+                        e.setVelocity(kb);
+                        Spellbreak.getInstance().getAbilityDamage()
+                                .damage((LivingEntity)e, adjustedDamage, player, MeteorLashAbility.this, "MeteorLash");
+                    }
                 }
             }
-        }.runTaskTimer(Spellbreak.getInstance(),0,1);
-        w.playSound(player.getLocation(), Sound.ENTITY_GENERIC_EXPLODE,0.8f,0.5f);
+        }.runTaskTimer(Spellbreak.getInstance(), 0, 1);
+        w.playSound(player.getLocation(), Sound.ENTITY_GENERIC_EXPLODE, 0.8f, 0.5f);
     }
 
     private void createMeteorCube(Location center, List<Location> trail) {
@@ -166,20 +186,48 @@ public class MeteorLashAbility implements Ability {
     }
 
     private List<Location> createImpact(Player player, Location loc) {
-        World w=player.getWorld(); List<Location> pts=new ArrayList<>();
-        pts.add(loc.clone()); pts.add(loc.clone().add(1,0,0)); pts.add(loc.clone().add(-1,0,0)); pts.add(loc.clone().add(0,0,1)); pts.add(loc.clone().add(0,0,-1));
-        for(Location p:pts){ if(p.getBlock().getType().isAir()) p.getBlock().setType(Material.NETHERRACK);
-            for(Entity e:w.getNearbyEntities(p,adjustedImpactRadius,2,adjustedImpactRadius)) if(e instanceof LivingEntity&&!e.equals(player)){
-                double d=e.getLocation().distance(p); if(d<=adjustedImpactRadius){
-                    Vector kb=e.getLocation().toVector().subtract(p.toVector()).normalize().multiply(adjustedKnockback).setY(0.5);
-                    e.setVelocity(kb);
-                    Spellbreak.getInstance().getAbilityDamage().damage((LivingEntity)e, adjustedDamage*(1-(d/adjustedImpactRadius)), player, this, "MeteorLash");
+        World w = player.getWorld();
+        List<Location> pts = new ArrayList<>();
+        pts.add(loc.clone());
+        pts.add(loc.clone().add(1,0,0));
+        pts.add(loc.clone().add(-1,0,0));
+        pts.add(loc.clone().add(0,0,1));
+        pts.add(loc.clone().add(0,0,-1));
+
+        for(Location p : pts) {
+            Block block = p.getBlock();
+            // Only place impact blocks in air
+            if(block.getType().isAir()) {
+                block.setType(Material.NETHERRACK);
+                // Schedule block decay after 5 seconds (100 ticks)
+                new BukkitRunnable() {
+                    @Override public void run() {
+                        if (block.getType() == Material.NETHERRACK) {
+                            block.setType(Material.AIR);
+                        }
+                    }
+                }.runTaskLater(Spellbreak.getInstance(), 100);
+            }
+
+            // Damage and knockback calculations remain unchanged
+            for(Entity e : w.getNearbyEntities(p, adjustedImpactRadius, 2, adjustedImpactRadius)) {
+                if(e instanceof LivingEntity && !e.equals(player)) {
+                    double d = e.getLocation().distance(p);
+                    if(d <= adjustedImpactRadius) {
+                        Vector kb = e.getLocation().toVector().subtract(p.toVector())
+                                .normalize().multiply(adjustedKnockback).setY(0.5);
+                        e.setVelocity(kb);
+                        Spellbreak.getInstance().getAbilityDamage()
+                                .damage((LivingEntity)e, adjustedDamage * (1 - (d/adjustedImpactRadius)),
+                                        player, this, "MeteorLash");
+                    }
                 }
             }
-            w.spawnParticle(Particle.EXPLOSION,p,1,0,0,0,0);
-            w.spawnParticle(Particle.FLAME,p,particleCount,0.5,0.5,0.5,0.1);
-            w.spawnParticle(Particle.SMOKE,p,10,0.3,0.3,0.3,0.05);
-            w.playSound(p,Sound.ENTITY_GENERIC_EXPLODE,1f,0.8f); w.playSound(p,Sound.BLOCK_ANVIL_LAND,0.5f,0.5f);
+            w.spawnParticle(Particle.EXPLOSION, p, 1, 0, 0, 0, 0);
+            w.spawnParticle(Particle.FLAME, p, particleCount, 0.5, 0.5, 0.5, 0.1);
+            w.spawnParticle(Particle.SMOKE, p, 10, 0.3, 0.3, 0.3, 0.05);
+            w.playSound(p, Sound.ENTITY_GENERIC_EXPLODE, 1f, 0.8f);
+            w.playSound(p, Sound.BLOCK_ANVIL_LAND, 0.5f, 0.5f);
         }
         return pts;
     }

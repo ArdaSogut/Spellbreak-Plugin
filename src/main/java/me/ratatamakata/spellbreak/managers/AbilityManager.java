@@ -70,6 +70,11 @@ public class AbilityManager {
 
         // Starcaller abilities
         register(new MeteorLashAbility());
+        register(new BlackHoleAbility());
+        register(new StarPhaseAbility());
+        register(new PhotonBeamAbility());
+        register(new QuantumAnchorAbility());
+        register(new SolarLanceAbility());
 
 
         map.values().forEach(Ability::loadConfig);

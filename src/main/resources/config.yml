@@ -50,3 +50,8 @@ classes:
   Starcaller:
     abilities:
       - MeteorLash
+      - BlackHole
+      - StarPhase
+      - PhotonBeam
+      - QuantumAnchor
+      - SolarLance

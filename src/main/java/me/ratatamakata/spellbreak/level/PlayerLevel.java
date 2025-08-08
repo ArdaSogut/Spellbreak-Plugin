@@ -23,7 +23,7 @@ public class PlayerLevel {
     private void calculateStats() {
         // Base stats at level 1: 20 health, 100 mana
         this.maxHealth = 20 + ((level - 1) * 2); // +2 health per level
-        this.maxMana = 100 + ((level - 1) * 10); // +10 mana per level
+        this.maxMana = 1000 + ((level - 1) * 10); // +10 mana per level
         this.spellPower = 1.0 + ((level - 1) * 0.05); // +5% spell power per level
         this.manaRegenRate = 1.0 + ((level - 1) * 0.1); // +10% mana regen per level
     }

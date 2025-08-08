@@ -23,7 +23,7 @@ import java.util.concurrent.ConcurrentHashMap;
 public class BeaconOfClarityAbility implements Ability {
     private String name = "BeaconOfClarity";
     private String description = "Deploys a sacred beacon that bathes allies in healing light.";
-    private int cooldown = 21;
+    private int cooldown = 35;
     private int manaCost = 25;
     private String requiredClass = "lightbringer";
 

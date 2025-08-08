@@ -133,6 +133,11 @@ public final class Spellbreak extends JavaPlugin implements Listener {
         getServer().getPluginManager().registerEvents(new DailyProgressListener(this), this);
         getServer().getPluginManager().registerEvents(new UndyingPactListener(), this);
         getServer().getPluginManager().registerEvents(new MeteorLashListener(), this);
+        getServer().getPluginManager().registerEvents(new BlackHoleListener(), this);
+        getServer().getPluginManager().registerEvents(new StarPhaseListener(), this);
+        getServer().getPluginManager().registerEvents(new PhotonBeamListener(), this);
+        getServer().getPluginManager().registerEvents(new QuantumAnchorListener(), this);
+        getServer().getPluginManager().registerEvents(new SolarLanceListener(), this);
 
 
         getCommand("bind").setExecutor(new BindCommand());
