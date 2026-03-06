@@ -2,6 +2,7 @@ package me.ratatamakata.spellbreak.abilities.impl;
 
 import me.ratatamakata.spellbreak.Spellbreak;
 import me.ratatamakata.spellbreak.abilities.Ability;
+import me.ratatamakata.spellbreak.level.SpellLevel;
 import org.bukkit.*;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.entity.Player;
@@ -147,23 +148,37 @@ public class IronwoodShellAbility implements Ability {
         UUID uuid = player.getUniqueId();
         if (activeShells.contains(uuid)) return;
 
-        player.getWorld().playSound(player.getLocation(), Sound.BLOCK_WOOD_PLACE, 1f, 0.8f);
+        SpellLevel sl = Spellbreak.getInstance().getLevelManager()
+                .getSpellLevel(uuid,
+                        Spellbreak.getInstance().getPlayerDataManager().getPlayerClass(uuid),
+                        getName());
+
+        int scaledDuration = (int)(durationSeconds * sl.getDurationMultiplier());
+        // Brighter bark at higher levels
+        Color scaledBarkColor = (sl.getLevel() >= 3)
+                ? Color.fromRGB(150, 110, 40)  // olive-brown
+                : barkColor;
+
+        float activatePitch = 0.8f + sl.getLevel() * 0.05f;
+        player.getWorld().playSound(player.getLocation(), Sound.BLOCK_WOOD_PLACE, 1f, activatePitch);
+        // Level 5: dramatic bark armor sound
+        if (sl.getLevel() >= 5) {
+            player.getWorld().playSound(player.getLocation(), Sound.ENTITY_RAVAGER_STEP, 0.8f, 0.5f);
+        }
 
         damageAbsorbedThisCast.put(uuid, 0.0);
         instancesBlockedThisCast.put(uuid, 0);
 
         BukkitTask particleTask = new BukkitRunnable() {
             int ticks = 0;
-            final int totalDurationTicks = durationSeconds * 20;
+            final int totalDurationTicks = scaledDuration * 20;
 
             @Override
             public void run() {
                 if (!player.isValid() || !activeShells.contains(uuid)) {
                     damageAbsorbedThisCast.remove(uuid);
                     instancesBlockedThisCast.remove(uuid);
-                    if (player.isValid()) {
-                        player.spigot().sendMessage(ChatMessageType.ACTION_BAR, TextComponent.fromLegacyText(""));
-                    }
+                    if (player.isValid()) player.spigot().sendMessage(ChatMessageType.ACTION_BAR, TextComponent.fromLegacyText(""));
                     cancel();
                     return;
                 }
@@ -181,13 +196,23 @@ public class IronwoodShellAbility implements Ability {
                     return;
                 }
 
-                spawnBarkParticles(player);
+                spawnBarkParticlesScaled(player, scaledBarkColor);
 
-                // Update action bar every 10 ticks (0.5 seconds)
+                // Level 5: COMPOSTER ring every 2s
+                if (sl.getLevel() >= 5 && ticks % 40 == 0) {
+                    int ringPoints = 16;
+                    Location pLoc = player.getLocation().add(0, 1, 0);
+                    for (int i = 0; i < ringPoints; i++) {
+                        double angle = 2 * Math.PI * i / ringPoints;
+                        Location ring = pLoc.clone().add(Math.cos(angle) * 1.0, 0, Math.sin(angle) * 1.0);
+                        pLoc.getWorld().spawnParticle(Particle.COMPOSTER, ring, 1, 0.05, 0.05, 0.05, 0);
+                    }
+                }
+
                 if (ticks % 10 == 0) {
                     double secondsLeft = remainingTicks / 20.0;
-                    player.spigot().sendMessage(ChatMessageType.ACTION_BAR, 
-                        TextComponent.fromLegacyText(ChatColor.GOLD + "Ironwood Shell: " + String.format("%.1f", secondsLeft) + "s"));
+                    player.spigot().sendMessage(ChatMessageType.ACTION_BAR,
+                        TextComponent.fromLegacyText(ChatColor.GOLD + "Ironwood Shell: " + String.format("%.1f", secondsLeft) + "s [Lv" + sl.getLevel() + "]"));
                 }
                 ticks++;
             }
@@ -196,9 +221,9 @@ public class IronwoodShellAbility implements Ability {
         activeShells.add(uuid);
     }
 
-    private void spawnBarkParticles(Player player) {
+    private void spawnBarkParticlesScaled(Player player, Color color) {
         Location loc = player.getLocation().add(0, 1, 0);
         player.getWorld().spawnParticle(Particle.DUST, loc, 15, 0.5, 0.5, 0.5,
-                new Particle.DustOptions(barkColor, 1.2f));
+                new Particle.DustOptions(color, 1.2f));
     }
 }

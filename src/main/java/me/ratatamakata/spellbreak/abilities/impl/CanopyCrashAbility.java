@@ -2,6 +2,7 @@ package me.ratatamakata.spellbreak.abilities.impl;
 
 import me.ratatamakata.spellbreak.Spellbreak;
 import me.ratatamakata.spellbreak.abilities.Ability;
+import me.ratatamakata.spellbreak.level.SpellLevel;
 import org.bukkit.*;
 import org.bukkit.block.Block;
 import org.bukkit.block.BlockFace;
@@ -39,46 +40,44 @@ public class CanopyCrashAbility implements Ability {
 
     @Override
     public void activate(Player player) {
-        // Remove the problematic absolute Y check and replace with relative height check
         if (player.isOnGround()) return;
-
-        // Calculate height above ground properly
         double heightAboveGround = calculateHeightAboveGround(player.getLocation());
         if (heightAboveGround < minHeight) return;
 
+        SpellLevel sl = Spellbreak.getInstance().getLevelManager()
+                .getSpellLevel(player.getUniqueId(),
+                        Spellbreak.getInstance().getPlayerDataManager().getPlayerClass(player.getUniqueId()),
+                        getName());
+
+        double scaledRadius = radius * sl.getRangeMultiplier();
+        double scaledDamage = damage * sl.getDamageMultiplier();
+
         activeSlams.add(player.getUniqueId());
         World world = player.getWorld();
-        Location startLoc = player.getLocation();
 
-        // Initial boost and protection
+        float chargePitch = 0.6f + sl.getLevel() * 0.08f;
+        world.playSound(player.getLocation(), Sound.ENTITY_RAVAGER_STEP, 0.5f, chargePitch);
+
         player.setVelocity(new Vector(0, -2.5, 0));
         player.setInvulnerable(true);
 
-        // Charge particles
+        Particle.DustOptions chargeDust = new Particle.DustOptions(
+                sl.getLevel() >= 3 ? Color.fromRGB(0, 200, 80) : Color.fromRGB(50, 205, 50), 2.0f);
+
         new BukkitRunnable() {
             int ticks = 0;
-            final Particle.DustOptions chargeDust = new Particle.DustOptions(
-                    Color.fromRGB(50, 205, 50), 2.0f);
-
             @Override
             public void run() {
                 if (player.isOnGround() || ticks++ > 100) {
                     cancel();
-                    resolveImpact(player);
+                    resolveImpact(player, scaledRadius, scaledDamage, sl);
                     return;
                 }
-
-                // Swirling leaf charge
                 double angle = Math.toRadians(ticks * 15);
                 double x = Math.cos(angle) * 1.2;
                 double z = Math.sin(angle) * 1.2;
-
-                world.spawnParticle(Particle.DUST,
-                        player.getLocation().add(x, 0.5, z),
-                        2, 0.1, 0.1, 0.1, chargeDust);
-                world.spawnParticle(Particle.DUST,
-                        player.getLocation().add(-x, 0.5, -z),
-                        2, 0.1, 0.1, 0.1, chargeDust);
+                world.spawnParticle(Particle.DUST, player.getLocation().add(x, 0.5, z), 2, 0.1, 0.1, 0.1, chargeDust);
+                world.spawnParticle(Particle.DUST, player.getLocation().add(-x, 0.5, -z), 2, 0.1, 0.1, 0.1, chargeDust);
             }
         }.runTaskTimer(Spellbreak.getInstance(), 0, 1);
     }
@@ -104,72 +103,80 @@ public class CanopyCrashAbility implements Ability {
         return -1;
     }
 
-    private void resolveImpact(Player player) {
+    private void resolveImpact(Player player, double scaledRadius, double scaledDamage, SpellLevel sl) {
         if (!activeSlams.remove(player.getUniqueId())) return;
-
         World world = player.getWorld();
         Location impactLoc = player.getLocation();
         player.setInvulnerable(false);
 
-        // Find actual ground position
         Block ground = impactLoc.getBlock().getRelative(BlockFace.DOWN);
-        while (!ground.getType().isSolid() && ground.getY() > 0) {
-            ground = ground.getRelative(BlockFace.DOWN);
-        }
+        while (!ground.getType().isSolid() && ground.getY() > 0) ground = ground.getRelative(BlockFace.DOWN);
         impactLoc = ground.getLocation().add(0.5, 1, 0.5);
 
-        // Shockwave effect
-        createShockwave(impactLoc, world);
-        applyDamage(impactLoc, world, player);
-        world.playSound(impactLoc, Sound.ENTITY_RAVAGER_ROAR, 0.8f, 1.8f);
+        createShockwave(impactLoc, world, scaledRadius, sl);
+        applyDamageScaled(impactLoc, world, player, scaledRadius, scaledDamage);
+
+        float impactPitch = 1.8f + sl.getLevel() * 0.05f;
+        world.playSound(impactLoc, Sound.ENTITY_RAVAGER_ROAR, 0.8f, impactPitch);
+        // Level 5: extra thunderous crash
+        if (sl.getLevel() >= 5) {
+            world.playSound(impactLoc, Sound.ENTITY_RAVAGER_STEP, 1.2f, 0.7f);
+            world.spawnParticle(Particle.BLOCK_CRUMBLE, impactLoc, 40, 1.5, 0.2, 1.5, 0.3, ground.getBlockData());
+        }
     }
 
-    private void createShockwave(Location center, World world) {
+    // Keep backward-compat stub (not used but avoids compile errors if referenced)
+    private void resolveImpact(Player player) {
+        resolveImpact(player, radius, damage, Spellbreak.getInstance().getLevelManager()
+                .getSpellLevel(player.getUniqueId(),
+                        Spellbreak.getInstance().getPlayerDataManager().getPlayerClass(player.getUniqueId()),
+                        getName()));
+    }
+
+    private void createShockwave(Location center, World world, double scaledRadius, SpellLevel sl) {
         new BukkitRunnable() {
             double expansion = 0.0;
-
             @Override
             public void run() {
-                if (expansion > radius) {
-                    cancel();
-                    return;
-                }
-
-                // Circular shockwave
+                if (expansion > scaledRadius) { cancel(); return; }
                 for (int i = 0; i < particleCount; i++) {
-                    double angle = Math.toRadians((360.0/particleCount)*i);
+                    double angle = Math.toRadians((360.0 / particleCount) * i);
                     Location loc = center.clone().add(
-                            Math.cos(angle) * expansion,
-                            0.2,
-                            Math.sin(angle) * expansion
-                    );
+                            Math.cos(angle) * expansion, 0.2, Math.sin(angle) * expansion);
 
                     Particle.DustOptions dust = new Particle.DustOptions(
-                            Color.fromRGB(34, 139, 34),
-                            1.5f + (float)(expansion/radius)*1.5f
-                    );
+                            sl.getLevel() >= 3 ? Color.fromRGB(0, 200, 80) : Color.fromRGB(34, 139, 34),
+                            1.5f + (float)(expansion / scaledRadius) * 1.5f);
+                    world.spawnParticle(Particle.DUST, loc, 1, 0, 0, 0, 0, dust);
 
-                    world.spawnParticle(Particle.DUST, loc, 1,
-                            0, 0, 0, 0, dust);
+                    // Level 3+: TOTEM_OF_UNDYING ring every 3rd point
+                    if (sl.getLevel() >= 3 && i % 3 == 0) {
+                        world.spawnParticle(Particle.TOTEM_OF_UNDYING, loc, 1, 0.05, 0.05, 0.05, 0.02);
+                    }
                 }
-
                 expansion += 0.35;
             }
         }.runTaskTimer(Spellbreak.getInstance(), 0, 1);
     }
 
-    private void applyDamage(Location center, World world, Player caster) {
-        world.getNearbyEntities(center, radius, 2.0, radius).forEach(e -> {
+    private void createShockwave(Location center, World world) {
+        createShockwave(center, world, radius, Spellbreak.getInstance().getLevelManager()
+                .getSpellLevel(java.util.UUID.randomUUID(), "archdruid", getName()));
+    }
+
+    private void applyDamageScaled(Location center, World world, Player caster, double scaledRadius, double scaledDamage) {
+        world.getNearbyEntities(center, scaledRadius, 2.0, scaledRadius).forEach(e -> {
             if (!(e instanceof LivingEntity) || e.equals(caster)) return;
-
             LivingEntity entity = (LivingEntity) e;
-            Spellbreak.getInstance().getAbilityDamage().damage(entity, damage, caster, this, null);
-
-            Vector dir = entity.getLocation().toVector()
-                    .subtract(center.toVector()).normalize();
+            Spellbreak.getInstance().getAbilityDamage().damage(entity, scaledDamage, caster, this, null);
+            Vector dir = entity.getLocation().toVector().subtract(center.toVector()).normalize();
             dir.setY(verticalKnockback);
             entity.setVelocity(dir.multiply(horizontalKnockback));
         });
+    }
+
+    private void applyDamage(Location center, World world, Player caster) {
+        applyDamageScaled(center, world, caster, radius, damage);
     }
 
     @Override

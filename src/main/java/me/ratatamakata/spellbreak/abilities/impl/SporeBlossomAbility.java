@@ -2,6 +2,7 @@ package me.ratatamakata.spellbreak.abilities.impl;
 
 import me.ratatamakata.spellbreak.Spellbreak;
 import me.ratatamakata.spellbreak.abilities.Ability;
+import me.ratatamakata.spellbreak.level.SpellLevel;
 import org.bukkit.*;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.entity.LivingEntity;
@@ -58,69 +59,76 @@ public class SporeBlossomAbility implements Ability {
 
     @Override
     public void activate(Player player) {
+        SpellLevel sl = Spellbreak.getInstance().getLevelManager()
+                .getSpellLevel(player.getUniqueId(),
+                        Spellbreak.getInstance().getPlayerDataManager().getPlayerClass(player.getUniqueId()),
+                        getName());
+
+        double scaledRadius = radius * sl.getRangeMultiplier();
+        double scaledDamage = damage * sl.getDamageMultiplier();
+        int scaledSporeCount = sporeCount + (sl.getLevel() >= 3 ? 20 : 0);
+
+        // Color shift for L3+ (brighter gold)
+        Color[] activeColors = (sl.getLevel() >= 3)
+                ? new Color[]{ Color.fromRGB(255, 200, 60), Color.fromRGB(240, 180, 40), Color.fromRGB(220, 165, 30) }
+                : pollenColors;
+
         Location center = player.getLocation().getBlock().getLocation().add(0.5, 0.1, 0.5);
         World world = center.getWorld();
         UUID blossomId = UUID.randomUUID();
 
-        // Immediate knockback
+        // Knockback
         Vector back = player.getLocation().getDirection().setY(0).normalize().multiply(-knockbackHorizontal);
         back.setY(knockbackVertical);
         player.setVelocity(back);
 
-        // Initial damage application
-        applyInitialDamage(center, world, player);
+        // Initial damage
+        world.getNearbyEntities(center, scaledRadius, effectHeight, scaledRadius).forEach(ent -> {
+            if (!(ent instanceof LivingEntity) || ent.equals(player)) return;
+            Spellbreak.getInstance().getAbilityDamage().damage((LivingEntity) ent, scaledDamage, player, this, null);
+        });
 
-        // Sound effects
-        world.playSound(center, Sound.BLOCK_GRASS_BREAK, 1.2f, 0.6f);
-        world.playSound(center, Sound.ENTITY_BEE_POLLINATE, 0.8f, 0.8f);
+        // Sounds
+        float pitch = 0.6f + sl.getLevel() * 0.08f;
+        world.playSound(center, Sound.BLOCK_GRASS_BREAK, 1.2f, pitch);
+        world.playSound(center, Sound.ENTITY_BEE_POLLINATE, 0.8f, pitch);
+        // Level 5: thunderous bloom burst
+        if (sl.getLevel() >= 5) {
+            world.playSound(center, Sound.ENTITY_RAVAGER_ROAR, 0.7f, 1.5f);
+        }
 
-        // Store active blossom
         activeBlossoms.put(blossomId, center);
         new BukkitRunnable() {
             int tick = 0;
-
             @Override public void run() {
-                if (tick++ > lingerDuration) {
-                    activeBlossoms.remove(blossomId);
-                    cancel();
-                    return;
-                }
+                if (tick++ > lingerDuration) { activeBlossoms.remove(blossomId); cancel(); return; }
 
-                // Create pollen cloud effect
-                for (int i = 0; i < sporeCount; i++) {
+                for (int i = 0; i < scaledSporeCount; i++) {
                     double angle = random.nextDouble() * Math.PI * 2;
-                    double dist = random.nextDouble() * radius;
-                    double yOffset = Math.sin(tick*0.1) * 0.5; // Floating motion
-
+                    double dist = random.nextDouble() * scaledRadius;
+                    double yOffset = Math.sin(tick * 0.1) * 0.5;
                     Location loc = center.clone().add(
                             Math.cos(angle) * dist,
                             yOffset + (random.nextDouble() * effectHeight),
-                            Math.sin(angle) * dist
-                    );
+                            Math.sin(angle) * dist);
 
-                    // Random pollen color and size
-                    Color color = pollenColors[random.nextInt(pollenColors.length)];
-                    Color endColor = brightenColor(color, 0.2f); // 20% brighter
+                    Color color = activeColors[random.nextInt(activeColors.length)];
+                    Color endColor = brightenColor(color, 0.2f);
                     float size = 2.5f + random.nextFloat() * 2.5f;
-
-                    world.spawnParticle(
-                            Particle.DUST_COLOR_TRANSITION,
-                            loc,
-                            1,
-                            0.3, 0.3, 0.3,
-                            0.05,
-                            new Particle.DustTransition(
-                                    color,
-                                    endColor,
-                                    size
-                            )
-                    );
+                    world.spawnParticle(Particle.DUST_COLOR_TRANSITION, loc, 1, 0.3, 0.3, 0.3, 0.05,
+                            new Particle.DustTransition(color, endColor, size));
                 }
 
-                // Apply lingering effects
-                activeBlossoms.values().forEach(loc ->
-                        applyLingeringEffects(loc, world, player)
-                );
+                // Level 5: Blindness pulse every 2s
+                if (sl.getLevel() >= 5 && tick % 40 == 0) {
+                    world.getNearbyEntities(center, scaledRadius, effectHeight, scaledRadius).forEach(ent -> {
+                        if (!(ent instanceof LivingEntity) || ent.equals(player)) return;
+                        ((LivingEntity) ent).addPotionEffect(
+                                new org.bukkit.potion.PotionEffect(PotionEffectType.BLINDNESS, 20, 0, false, true, true));
+                    });
+                }
+
+                activeBlossoms.values().forEach(loc -> applyLingeringEffectsScaled(loc, world, player, scaledRadius));
             }
         }.runTaskTimer(Spellbreak.getInstance(), 0L, 1L);
     }
@@ -133,26 +141,17 @@ public class SporeBlossomAbility implements Ability {
         });
     }
 
-    private void applyLingeringEffects(Location center, World world, Player caster) {
-        world.getNearbyEntities(center, radius, effectHeight, radius).forEach(ent -> {
+    private void applyLingeringEffectsScaled(Location center, World world, Player caster, double scaledRadius) {
+        world.getNearbyEntities(center, scaledRadius, effectHeight, scaledRadius).forEach(ent -> {
             if (!(ent instanceof LivingEntity) || ent.equals(caster)) return;
             LivingEntity e = (LivingEntity) ent;
-
-            // Refresh effects
-            e.addPotionEffect(new PotionEffect(
-                    PotionEffectType.SLOWNESS,
-                    40,  // 2 seconds
-                    1,
-                    false,
-                    true
-            ));
-
-            e.addPotionEffect(new PotionEffect(
-                    PotionEffectType.POISON,
-                    40,  // 2 seconds
-                    0
-            ));
+            e.addPotionEffect(new PotionEffect(PotionEffectType.SLOWNESS, 40, 1, false, true));
+            e.addPotionEffect(new PotionEffect(PotionEffectType.POISON, 40, 0));
         });
+    }
+
+    private void applyLingeringEffects(Location center, World world, Player caster) {
+        applyLingeringEffectsScaled(center, world, caster, radius);
     }
 
     @Override public void loadConfig() {

@@ -2,6 +2,7 @@ package me.ratatamakata.spellbreak.abilities.impl;
 
 import me.ratatamakata.spellbreak.Spellbreak;
 import me.ratatamakata.spellbreak.abilities.Ability;
+import me.ratatamakata.spellbreak.level.SpellLevel;
 import org.bukkit.*;
 import org.bukkit.block.Block;
 import org.bukkit.configuration.file.FileConfiguration;
@@ -108,35 +109,40 @@ public class QuillflareSurgeAbility implements Ability {
     @Override
     public void activate(Player player) {
         if (activeLeapers.contains(player.getUniqueId())) return;
+
+        SpellLevel sl = Spellbreak.getInstance().getLevelManager()
+                .getSpellLevel(player.getUniqueId(),
+                        Spellbreak.getInstance().getPlayerDataManager().getPlayerClass(player.getUniqueId()),
+                        getName());
+
         if (slowFallDurationTicks > 0) {
             player.addPotionEffect(new PotionEffect(PotionEffectType.SLOW_FALLING, slowFallDurationTicks, 0, false, false, true));
         }
 
+        float leapPitch = 1.5f + sl.getLevel() * 0.05f;
         Vector velocity = player.getVelocity();
-        velocity.setY(leapPower);
+        velocity.setY(leapPower * sl.getRangeMultiplier()) ;
         player.setVelocity(velocity);
-        player.getWorld().playSound(player.getLocation(), Sound.ENTITY_RAVAGER_ROAR, 0.7f, 1.5f);
+        player.getWorld().playSound(player.getLocation(), Sound.ENTITY_RAVAGER_ROAR, 0.7f, leapPitch);
 
         activeLeapers.add(player.getUniqueId());
+
+        final int scaledQuillCount = quillCount + (sl.getLevel() >= 5 ? 2 : 0);
+        final double scaledQuillDamage = quillDamage * sl.getDamageMultiplier();
 
         new BukkitRunnable() {
             boolean quillsReleased = false;
             int ticksInAir = 0;
-
             @Override
             public void run() {
                 ticksInAir++;
-                if (!player.isOnline() || player.isDead()) {
-                    activeLeapers.remove(player.getUniqueId());
-                    cancel();
-                    return;
-                }
+                if (!player.isOnline() || player.isDead()) { activeLeapers.remove(player.getUniqueId()); cancel(); return; }
                 if (!quillsReleased && (player.getVelocity().getY() < 0.05 || ticksInAir > 12)) {
-                    releaseQuills(player);
+                    releaseQuills(player, sl, scaledQuillCount, scaledQuillDamage);
                     quillsReleased = true;
                 }
                 if (player.isOnGround() && ticksInAir > 3) {
-                    if (quillsReleased) performShockwave(player);
+                    if (quillsReleased) performShockwave(player, sl);
                     activeLeapers.remove(player.getUniqueId());
                     cancel();
                 } else if (ticksInAir > 70) {
@@ -147,16 +153,19 @@ public class QuillflareSurgeAbility implements Ability {
         }.runTaskTimer(Spellbreak.getInstance(), 0L, 1L);
     }
 
-    private void performShockwave(Player caster) {
+    private void performShockwave(Player caster, SpellLevel sl) {
         Location center = caster.getLocation();
         World world = caster.getWorld();
-        world.getNearbyEntities(center, shockwaveRadius, shockwaveRadius, shockwaveRadius)
+        double scaledShockRadius = shockwaveRadius * sl.getRangeMultiplier();
+        double scaledShockDmg = shockwaveDamage * sl.getDamageMultiplier();
+
+        world.getNearbyEntities(center, scaledShockRadius, scaledShockRadius, scaledShockRadius)
                 .stream()
                 .filter(e -> e instanceof LivingEntity && !e.getUniqueId().equals(caster.getUniqueId())
-                        && e.getLocation().distanceSquared(center) <= shockwaveRadius * shockwaveRadius)
+                        && e.getLocation().distanceSquared(center) <= scaledShockRadius * scaledShockRadius)
                 .forEach(e -> {
                     LivingEntity t = (LivingEntity)e;
-                    Spellbreak.getInstance().getAbilityDamage().damage(t, shockwaveDamage, caster, this, null);
+                    Spellbreak.getInstance().getAbilityDamage().damage(t, scaledShockDmg, caster, this, null);
                     Vector dir = t.getLocation().toVector().subtract(center.toVector()).normalize();
                     if (dir.lengthSquared() < 0.001) dir = new Vector(Math.random()-0.5,0.2,Math.random()-0.5).normalize();
                     else dir.setY(Math.max(0.25, dir.getY()*0.4+0.25));
@@ -164,45 +173,56 @@ public class QuillflareSurgeAbility implements Ability {
                 });
         world.playSound(center, Sound.BLOCK_GRASS_BREAK, 1.2f, 0.8f);
         world.playSound(center, Sound.ENTITY_PLAYER_ATTACK_SWEEP, 1.0f, 1.2f);
-        Block below = center.clone().subtract(0,1,0).getBlock();
         Particle.DustOptions dust = new Particle.DustOptions(quillColor, quillSize);
-        world.spawnParticle(Particle.DUST, center.clone().add(0,0.2,0), 40,
-                shockwaveRadius*0.6, 0.1, shockwaveRadius*0.6, 0.02, dust);
-        world.spawnParticle(Particle.DUST, center.clone().add(0,0.5,0), 25,
-                shockwaveRadius*0.5, 0.3, shockwaveRadius*0.5, 0.05, dust);
+        world.spawnParticle(Particle.DUST, center.clone().add(0,0.2,0), 40, scaledShockRadius*0.6, 0.1, scaledShockRadius*0.6, 0.02, dust);
+        world.spawnParticle(Particle.DUST, center.clone().add(0,0.5,0), 25, scaledShockRadius*0.5, 0.3, scaledShockRadius*0.5, 0.05, dust);
+        // Level 5: SPORE ring
+        if (sl.getLevel() >= 5) {
+            world.spawnParticle(Particle.SPORE_BLOSSOM_AIR, center.clone().add(0,1,0), 30, scaledShockRadius*0.7, 0.5, scaledShockRadius*0.7, 0.1);
+            world.playSound(center, Sound.ENTITY_BEE_POLLINATE, 1.0f, 0.7f);
+        }
     }
 
-    private void releaseQuills(Player caster) {
+    private void performShockwave(Player caster) {
+        performShockwave(caster, Spellbreak.getInstance().getLevelManager()
+                .getSpellLevel(caster.getUniqueId(),
+                        Spellbreak.getInstance().getPlayerDataManager().getPlayerClass(caster.getUniqueId()),
+                        getName()));
+    }
+
+    private void releaseQuills(Player caster, SpellLevel sl, int scaledCount, double scaledDmg) {
         Location origin = caster.getEyeLocation().add(0,-0.2,0);
         World world = caster.getWorld();
         Particle.DustOptions dustOpts = new Particle.DustOptions(quillColor, quillSize);
-        world.playSound(origin, Sound.ENTITY_EVOKER_CAST_SPELL, 1.0f, 1.2f);
-        for (int i=0; i<quillCount; i++) {
-            // Calculate a base yaw for even distribution, then add a small random offset
-            double baseYaw = (2 * Math.PI / (double)this.quillCount) * i;
-            double yawRandomOffset = (Math.random() - 0.5) * (Math.PI / (this.quillCount * 3.0)); // Further reduced random variation for tighter horizontal spread
+        float releasePitch = 1.2f + sl.getLevel() * 0.05f;
+        world.playSound(origin, Sound.ENTITY_EVOKER_CAST_SPELL, 1.0f, releasePitch);
+        for (int i = 0; i < scaledCount; i++) {
+            double baseYaw = (2 * Math.PI / (double)scaledCount) * i;
+            double yawRandomOffset = (Math.random() - 0.5) * (Math.PI / (scaledCount * 3.0));
             double yaw = baseYaw + yawRandomOffset;
-
-            // Narrowed pitch range for a more focused vertical spread
             double pitch = (Math.random()*Math.PI/4.0)-(Math.PI/8.0);
             Vector dir = new Vector(Math.cos(pitch)*Math.cos(yaw), Math.sin(pitch),
                     Math.cos(pitch)*Math.sin(yaw)).normalize()
                     .multiply(quillSpeed*(0.85+Math.random()*0.3));
             Consumer<LivingEntity> hit = target -> {
-                Spellbreak.getInstance().getAbilityDamage().damage(target, quillDamage, caster, this, null);
+                Spellbreak.getInstance().getAbilityDamage().damage(target, scaledDmg, caster, this, null);
                 target.addPotionEffect(new PotionEffect(PotionEffectType.POISON, poisonDuration, 0));
                 target.getWorld().spawnParticle(Particle.DUST, target.getLocation().add(0,target.getHeight()/2,0),
                         10, 0.3,0.3,0.3, 0.03, dustOpts);
                 target.getWorld().playSound(target.getLocation(), Sound.ENTITY_ARROW_HIT_PLAYER, 0.7f, 1.2f);
+                // Level 3+: cherry leaf burst on hit
+                if (sl.getLevel() >= 3) {
+                    target.getWorld().spawnParticle(Particle.CHERRY_LEAVES, target.getLocation().add(0,1,0), 6, 0.3, 0.3, 0.3, 0.05);
+                }
             };
             BiConsumer<Block, Location> blockHit = (b,l) -> {
                 l.getWorld().spawnParticle(Particle.DUST, l, 15, 0.15,0.15,0.15, 0.02, dustOpts);
                 l.getWorld().playSound(l, Sound.BLOCK_WOOD_HIT, 0.8f, 1.0f);
             };
             Consumer<Location> expire = loc -> loc.getWorld().spawnParticle(
-                    Particle.DUST, loc, 5,0.1,0.1,0.1,0.02, dustOpts);
+                    Particle.DUST, loc, 5, 0.1,0.1,0.1,0.02, dustOpts);
             new QuillProjectileRunnable(caster, origin.clone(), dir, quillRange, quillHitRadius,
-                    dustOpts, 
+                    dustOpts,
                     e -> e instanceof LivingEntity && !e.getUniqueId().equals(caster.getUniqueId()) && !e.isDead(),
                     e -> true,
                     quillHomingStrength, homingAngleRadians,
@@ -210,6 +230,13 @@ public class QuillflareSurgeAbility implements Ability {
                     hit, blockHit, expire)
                     .runTaskTimer(Spellbreak.getInstance(), 0L, 1L);
         }
+    }
+
+    private void releaseQuills(Player caster) {
+        releaseQuills(caster, Spellbreak.getInstance().getLevelManager()
+                .getSpellLevel(caster.getUniqueId(),
+                        Spellbreak.getInstance().getPlayerDataManager().getPlayerClass(caster.getUniqueId()),
+                        getName()), quillCount, quillDamage);
     }
 
     private class QuillProjectileRunnable extends BukkitRunnable {

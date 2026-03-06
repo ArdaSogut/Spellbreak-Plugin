@@ -2,6 +2,7 @@ package me.ratatamakata.spellbreak.abilities.impl;
 
 import me.ratatamakata.spellbreak.Spellbreak;
 import me.ratatamakata.spellbreak.abilities.Ability;
+import me.ratatamakata.spellbreak.level.SpellLevel;
 import me.ratatamakata.spellbreak.managers.ManaSystem;
 import org.bukkit.Location;
 import org.bukkit.Material;
@@ -134,172 +135,184 @@ public class NatureStepAbility implements Ability {
 
     @Override
     public void activate(Player player) {
-        successfulActivation = false; // Reset flag
+        successfulActivation = false;
         UUID playerUUID = player.getUniqueId();
         long now = System.currentTimeMillis();
-        Location originLocation = player.getLocation().clone(); // Store start location safely
+        Location originLocation = player.getLocation().clone();
+
+        SpellLevel sl = Spellbreak.getInstance().getLevelManager()
+                .getSpellLevel(playerUUID,
+                        Spellbreak.getInstance().getPlayerDataManager().getPlayerClass(playerUUID),
+                        getName());
+
+        double scaledDashDistance = dashDistance * sl.getRangeMultiplier();
+        double scaledOrbDamage = orbDamage * sl.getDamageMultiplier();
+        double scaledOrbRadius = orbRadius * sl.getRangeMultiplier();
 
         // 1. Detonate existing orb if present
         if (orbEnabled && activeOrbLocations.containsKey(playerUUID)) {
             Location orbLocation = activeOrbLocations.remove(playerUUID);
             BukkitTask visualTask = activeOrbTasks.remove(playerUUID);
-            if (visualTask != null && !visualTask.isCancelled()) {
-                visualTask.cancel();
-            }
-            if (orbLocation != null) { // Ensure location exists
-               detonateOrb(orbLocation, player); // Detonate BEFORE checks
-            }
+            if (visualTask != null && !visualTask.isCancelled()) visualTask.cancel();
+            if (orbLocation != null) detonateOrb(orbLocation, player, scaledOrbDamage, scaledOrbRadius, sl);
         }
 
         // 2. Check internal cooldown
-        if (now - lastUsedTime.getOrDefault(playerUUID, 0L) < internalCooldownMillis) {
-            return; // Silently fail if too fast, orb still detonates
-        }
+        if (now - lastUsedTime.getOrDefault(playerUUID, 0L) < internalCooldownMillis) return;
 
         // 3. Check charges
         int currentCharges = getCharges(playerUUID);
         if (currentCharges <= 0) {
             player.playSound(player.getLocation(), Sound.BLOCK_DISPENSER_FAIL, 1f, 1f);
-            // Maybe send action bar message: player.spigot().sendMessage(ChatMessageType.ACTION_BAR, new TextComponent("§cNatureStep has no charges!"));
             return;
         }
 
-        // 4. Check mana & Consume if possible
+        // 4. Check mana
         ManaSystem manaSystem = Spellbreak.getInstance().getManaSystem();
         if (!manaSystem.consumeMana(player, manaCost)) {
-            player.playSound(player.getLocation(), Sound.BLOCK_NOTE_BLOCK_DIDGERIDOO, 1f, 0.5f); // Out of mana sound
-            player.spigot().sendMessage(ChatMessageType.ACTION_BAR, new TextComponent("§cNot enough mana for NatureStep!"));
+            player.playSound(player.getLocation(), Sound.BLOCK_NOTE_BLOCK_DIDGERIDOO, 1f, 0.5f);
+            player.spigot().sendMessage(net.md_5.bungee.api.ChatMessageType.ACTION_BAR, new net.md_5.bungee.api.chat.TextComponent("§cNot enough mana for NatureStep!"));
             return;
         }
 
-        // --- Checks passed & Mana consumed ---
-
-        // 5. Consume charge & Record time
+        // 5. Consume charge & record time
         consumeCharge(playerUUID);
         lastUsedTime.put(playerUUID, now);
 
         // 6. Calculate target location
         Location eyeLocation = player.getEyeLocation();
         Vector direction = eyeLocation.getDirection().normalize();
-        Location targetLocation = eyeLocation.add(direction.multiply(dashDistance));
+        Location targetLocation = eyeLocation.add(direction.multiply(scaledDashDistance));
 
-        // 7. Check for safe teleport & Adjust if needed
-        // Pass originLocation to check from where the player *was*
-        Location safeLocation = findSafeLocation(originLocation, targetLocation); 
+        // 7. Check for safe teleport
+        Location safeLocation = findSafeLocation(originLocation, targetLocation);
         if (safeLocation == null) {
-             player.playSound(player.getLocation(), Sound.BLOCK_DISPENSER_FAIL, 1f, 1.5f);
-             addCharge(playerUUID); // Refund charge if teleport fails
-             manaSystem.restoreMana(player, manaCost); // Refund mana
-             // Reset internal cooldown timer only if activation fails completely
-             lastUsedTime.put(playerUUID, 0L); 
+            player.playSound(player.getLocation(), Sound.BLOCK_DISPENSER_FAIL, 1f, 1.5f);
+            addCharge(playerUUID);
+            manaSystem.restoreMana(player, manaCost);
+            lastUsedTime.put(playerUUID, 0L);
             return;
         }
 
         safeLocation.setPitch(player.getLocation().getPitch());
         safeLocation.setYaw(player.getLocation().getYaw());
 
-        // 8. Effects at original location BEFORE teleport
-        playEffects(originLocation, true); // Use the stored origin
+        // 8. Effects at origin
+        playEffects(originLocation, true, sl);
 
         // 9. Teleport
         player.teleport(safeLocation);
 
-        // 10. Play effects at new location AFTER teleport
-        playEffects(player.getLocation(), false); // Use current location
+        // 10. Effects at destination
+        playEffects(player.getLocation(), false, sl);
 
         successfulActivation = true;
 
-         // 11. Spawn new orb visual AFTER successful teleport
-         if (orbEnabled) {
-             // Check orb internal cooldown
-             long lastOrb = lastOrbTime.getOrDefault(playerUUID, 0L);
-             if (now - lastOrb >= orbInternalCooldownMillis) { // Only spawn if cooldown is over
-                 // Ensure the world is not null before spawning
-                 if (originLocation.getWorld() != null) {
-                     spawnOrbVisual(originLocation, player); // Spawn visual at the place they LEFT FROM
-                     activeOrbLocations.put(playerUUID, originLocation); // Store location for next time
-                     lastOrbTime.put(playerUUID, now); // Record orb generation time
-                 } else {
-                     Spellbreak.getInstance().getLogger().warning("NatureStep: Could not spawn orb visual, origin location world was null for " + player.getName());
-                 }
-             } // else: Cooldown active, silently skip orb generation
-         }
-    }
-
-    private void playEffects(Location loc, boolean isStart) {
-        World world = loc.getWorld();
-        if (world == null) return; // Safety check
-
-        if (isStart) {
-            // Start: Burst of green/pink particles
-            world.playSound(loc, Sound.ENTITY_ENDERMAN_TELEPORT, 0.7f, 1.4f); // Slightly higher pitch
-            world.spawnParticle(Particle.SPORE_BLOSSOM_AIR, loc.add(0, 1, 0), 30, 0.5, 0.5, 0.5, 0.05);
-            world.spawnParticle(Particle.COMPOSTER, loc.add(0, 1, 0), 15, 0.4, 0.4, 0.4, 0.1);
-        } else {
-            // End: Gentle landing effect
-            world.playSound(loc, Sound.ENTITY_ENDERMAN_TELEPORT, 0.5f, 1.6f); // Quieter, higher pitch
-            // Corrected particle name
-            world.spawnParticle(Particle.TOTEM_OF_UNDYING, loc.add(0, 1.2, 0), 25, 0.4, 0.6, 0.4, 0.1);
-            world.spawnParticle(Particle.FALLING_SPORE_BLOSSOM, loc.add(0, 2.5, 0), 3, 0.3, 0.3, 0.3, 0);
-            
-            // --- Landing Bloom Effect --- 
-            Block feetBlock = loc.getBlock(); // Block player is standing in
-            Block groundBlock = feetBlock.getRelative(BlockFace.DOWN);
-
-            // Check if ground is suitable and the space at feet is air/replaceable
-            if (SUITABLE_GROUND.contains(groundBlock.getType()) && feetBlock.isPassable() && !feetBlock.isLiquid()) {
-                final BlockData originalBlockData = feetBlock.getBlockData(); // Store original block data
-                Material bloomType = BLOOM_OPTIONS.get(random.nextInt(BLOOM_OPTIONS.size()));
-                feetBlock.setType(bloomType, false); // Set bloom type, no physics update
-
-                // Schedule task to revert the block
-                new BukkitRunnable() {
-                    @Override
-                    public void run() {
-                        // Check if the block is still the temporary bloom before reverting
-                        if (feetBlock.getType() == bloomType) {
-                            feetBlock.setBlockData(originalBlockData, false); // Restore original, no physics
-                        }
-                    }
-                }.runTaskLater(Spellbreak.getInstance(), 60L); // Revert after 3 seconds (60 ticks)
+        // 11. Spawn new orb
+        if (orbEnabled) {
+            long lastOrb = lastOrbTime.getOrDefault(playerUUID, 0L);
+            if (now - lastOrb >= orbInternalCooldownMillis) {
+                if (originLocation.getWorld() != null) {
+                    spawnOrbVisual(originLocation, player);
+                    activeOrbLocations.put(playerUUID, originLocation);
+                    lastOrbTime.put(playerUUID, now);
+                }
             }
-            // --- End Landing Bloom Effect --- 
         }
     }
 
-    private void detonateOrb(Location location, Player caster) {
+    private void playEffects(Location loc, boolean isStart, SpellLevel sl) {
+        World world = loc.getWorld();
+        if (world == null) return;
+
+        if (isStart) {
+            world.playSound(loc, Sound.ENTITY_ENDERMAN_TELEPORT, 0.7f, 1.4f + sl.getLevel() * 0.05f);
+            world.spawnParticle(Particle.SPORE_BLOSSOM_AIR, loc.clone().add(0, 1, 0), 30 + sl.getLevel() * 5, 0.5, 0.5, 0.5, 0.05);
+            world.spawnParticle(Particle.COMPOSTER, loc.clone().add(0, 1, 0), 15, 0.4, 0.4, 0.4, 0.1);
+        } else {
+            world.playSound(loc, Sound.ENTITY_ENDERMAN_TELEPORT, 0.5f, 1.6f);
+            world.spawnParticle(Particle.TOTEM_OF_UNDYING, loc.clone().add(0, 1.2, 0), 25 + sl.getLevel() * 3, 0.4, 0.6, 0.4, 0.1);
+
+            // Level 3+: Cherry leaves blossom (instead of standard bloom)
+            if (sl.getLevel() >= 3) {
+                world.spawnParticle(Particle.CHERRY_LEAVES, loc.clone().add(0, 2.5, 0), 8, 0.5, 0.3, 0.5, 0.05);
+            } else {
+                world.spawnParticle(Particle.FALLING_SPORE_BLOSSOM, loc.clone().add(0, 2.5, 0), 3, 0.3, 0.3, 0.3, 0);
+            }
+
+            Block feetBlock = loc.getBlock();
+            Block groundBlock = feetBlock.getRelative(BlockFace.DOWN);
+            if (SUITABLE_GROUND.contains(groundBlock.getType()) && feetBlock.isPassable() && !feetBlock.isLiquid()) {
+                final BlockData originalBlockData = feetBlock.getBlockData();
+                // Level 3+: cherry blossom sapling
+                Material bloomType = (sl.getLevel() >= 3)
+                        ? Material.CHERRY_SAPLING
+                        : BLOOM_OPTIONS.get(random.nextInt(BLOOM_OPTIONS.size()));
+                feetBlock.setType(bloomType, false);
+                new BukkitRunnable() {
+                    @Override public void run() {
+                        if (feetBlock.getType() == bloomType) feetBlock.setBlockData(originalBlockData, false);
+                    }
+                }.runTaskLater(Spellbreak.getInstance(), 60L);
+            }
+        }
+    }
+
+    // Overload for backward compat (no level info)
+    private void playEffects(Location loc, boolean isStart) {
+        playEffects(loc, isStart, Spellbreak.getInstance().getLevelManager()
+                .getSpellLevel(java.util.UUID.randomUUID(), "archdruid", getName()));
+    }
+
+    private void detonateOrb(Location location, Player caster, double scaledDamage, double scaledRadius, SpellLevel sl) {
         World world = location.getWorld();
         if (world == null) return;
 
-        // Play Effects
         try {
             Sound explosionSound = Sound.valueOf(orbExplosionSoundName.toUpperCase());
-            world.playSound(location, explosionSound, 1.0f, 1.2f);
+            world.playSound(location, explosionSound, 1.0f, 1.2f + sl.getLevel() * 0.05f);
         } catch (IllegalArgumentException e) {
-             Spellbreak.getInstance().getLogger().warning("NatureStep: Invalid orb explosion sound name in config: " + orbExplosionSoundName);
-             world.playSound(location, Sound.BLOCK_GRASS_BREAK, 1.0f, 1.2f); // Nature-themed fallback sound
+            world.playSound(location, Sound.BLOCK_GRASS_BREAK, 1.0f, 1.2f);
         }
 
-        // Nature-themed particle effects
         Location effectLoc = location.clone().add(0, 0.5, 0);
-        world.spawnParticle(Particle.SPORE_BLOSSOM_AIR, effectLoc, 20, 0.5, 0.5, 0.5, 0.1);
+        world.spawnParticle(Particle.SPORE_BLOSSOM_AIR, effectLoc, 20 + sl.getLevel() * 5, 0.5, 0.5, 0.5, 0.1);
         world.spawnParticle(Particle.TOTEM_OF_UNDYING, effectLoc, 15, 0.3, 0.3, 0.3, 0.1);
         world.spawnParticle(Particle.COMPOSTER, effectLoc, 10, 0.4, 0.4, 0.4, 0.1);
 
-        // Apply Damage
-        if (orbDamage > 0 && orbRadius > 0) {
-            // Get nearby living entities, excluding the caster
-            List<LivingEntity> nearby = world.getNearbyEntities(location, orbRadius, orbRadius, orbRadius)
+        // Level 3+: cherry leaf burst on detonation
+        if (sl.getLevel() >= 3) {
+            world.spawnParticle(Particle.CHERRY_LEAVES, effectLoc, 12, 0.6, 0.6, 0.6, 0.1);
+        }
+
+        // Level 5: ring of totem particles
+        if (sl.getLevel() >= 5) {
+            int ringPoints = 24;
+            for (int i = 0; i < ringPoints; i++) {
+                double angle = 2 * Math.PI * i / ringPoints;
+                Location ring = effectLoc.clone().add(
+                        Math.cos(angle) * scaledRadius * 0.7, 0.2, Math.sin(angle) * scaledRadius * 0.7);
+                world.spawnParticle(Particle.TOTEM_OF_UNDYING, ring, 2, 0.05, 0.1, 0.05, 0);
+            }
+        }
+
+        if (scaledDamage > 0 && scaledRadius > 0) {
+            world.getNearbyEntities(location, scaledRadius, scaledRadius, scaledRadius)
                     .stream()
                     .filter(e -> e instanceof LivingEntity && !e.getUniqueId().equals(caster.getUniqueId()))
                     .map(e -> (LivingEntity) e)
-                    .collect(Collectors.toList());
-
-            for (LivingEntity target : nearby) {
-                 // Optional: Add team checks/PvP checks here if needed
-                Spellbreak.getInstance().getAbilityDamage().damage(target, orbDamage, caster, this, null);
-            }
+                    .collect(java.util.stream.Collectors.toList())
+                    .forEach(target -> Spellbreak.getInstance().getAbilityDamage().damage(target, scaledDamage, caster, this, null));
         }
+    }
+
+    // Backward-compat overload (used during spawn orb auto-detonation)
+    private void detonateOrb(Location location, Player caster) {
+        detonateOrb(location, caster, orbDamage, orbRadius,
+                Spellbreak.getInstance().getLevelManager()
+                        .getSpellLevel(caster.getUniqueId(),
+                                Spellbreak.getInstance().getPlayerDataManager().getPlayerClass(caster.getUniqueId()),
+                                getName()));
     }
 
     private void spawnOrbVisual(Location location, Player caster) {

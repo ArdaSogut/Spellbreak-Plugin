@@ -9,6 +9,7 @@ import java.util.UUID;
 import java.util.function.Predicate;
 import me.ratatamakata.spellbreak.Spellbreak;
 import me.ratatamakata.spellbreak.abilities.Ability;
+import me.ratatamakata.spellbreak.level.SpellLevel;
 import me.ratatamakata.spellbreak.util.ProjectileUtil;
 import net.md_5.bungee.api.ChatMessageType;
 import net.md_5.bungee.api.chat.TextComponent;
@@ -141,24 +142,28 @@ public class AmbushSlashAbility implements Ability {
     }
 
     public void activate(Player player) {
-        // Check if player is valid and has enough mana
         UUID casterUUID = player.getUniqueId();
         this.successfulActivation = false;
+
+        SpellLevel sl = Spellbreak.getInstance().getLevelManager()
+                .getSpellLevel(casterUUID,
+                        Spellbreak.getInstance().getPlayerDataManager().getPlayerClass(casterUUID),
+                        getName());
+
         if (this.markedTargets.containsKey(casterUUID)) {
             UUID targetUUID = (UUID)this.markedTargets.get(casterUUID);
             Entity targetEntity = Bukkit.getEntity(targetUUID);
             if (targetEntity instanceof LivingEntity && !targetEntity.isDead()) {
-                this.executeStage2(player, (LivingEntity)targetEntity);
+                this.executeStage2(player, (LivingEntity)targetEntity, sl);
             } else {
                 this.clearMark(casterUUID);
                 player.sendMessage(String.valueOf(ChatColor.RED) + "Marked target invalid!");
                 player.playSound(player.getLocation(), Sound.BLOCK_DISPENSER_FAIL, 1.0F, 1.0F);
             }
         } else {
-            this.launchMarkingProjectile(player);
+            this.launchMarkingProjectile(player, sl);
             this.successfulActivation = true;
         }
-
     }
 
     private void applyFizzleAndCooldown(Player caster, Location finalLoc) {
@@ -173,18 +178,23 @@ public class AmbushSlashAbility implements Ability {
 
     }
 
-    private void launchMarkingProjectile(Player caster) {
-        // Launch the marking projectile
+    private void launchMarkingProjectile(Player caster, SpellLevel sl) {
         World world = caster.getWorld();
         Location origin = caster.getEyeLocation();
         Vector dir = origin.getDirection().normalize();
+        double scaledDmg = stage1Damage * sl.getDamageMultiplier();
         DustOptions trailDust = new DustOptions(this.blastTrailColor, this.blastParticleSize);
         DustOptions initialBurstDust = new DustOptions(this.blastInitialColor, this.blastParticleSize * 1.2F);
         this.setActiveProjectile(caster.getUniqueId(), true);
         world.playSound(origin, Sound.ENTITY_PHANTOM_FLAP, 0.8F, 1.2F);
         world.spawnParticle(Particle.DUST, origin.clone().add(dir.multiply(0.2D)), 25, 0.25D, 0.25D, 0.25D, 0.0D, initialBurstDust);
+        // Level 3+: extra SPORE_BLOSSOM_AIR launch burst
+        if (sl.getLevel() >= 3) {
+            world.spawnParticle(Particle.SPORE_BLOSSOM_AIR, origin.clone(), 10, 0.3, 0.3, 0.3, 0.05);
+        }
         ProjectileUtil.launchProjectile(caster, origin, dir, this.projectileSpeed, this.blastRange, 4.0D, this.blastCheckRadius, Particle.DUST, trailDust, 3, Particle.TOTEM_OF_UNDYING, (Object)null, 1, (Predicate)null, (hitEntity) -> {
-            this.handleEntityHitAndEndProjectile(caster, hitEntity);
+            handleEntityHitWithLevel(caster, hitEntity, scaledDmg, sl);
+            this.setActiveProjectile(caster.getUniqueId(), false);
         }, (hitBlock, hitLoc) -> {
             this.handleBlockCollisionAndEndProjectile(caster, hitBlock, hitLoc);
         }, (finalLoc) -> {
@@ -217,12 +227,16 @@ public class AmbushSlashAbility implements Ability {
 
     }
 
-    private void handleEntityHit(Player caster, LivingEntity target) {
-        Spellbreak.getInstance().getAbilityDamage().damage(target, this.stage1Damage, caster, this, (String)null);
+    private void handleEntityHitWithLevel(Player caster, LivingEntity target, double scaledDmg, SpellLevel sl) {
+        Spellbreak.getInstance().getAbilityDamage().damage(target, scaledDmg, caster, this, null);
         this.markTarget(caster, target);
         DustOptions hitEffectDust = new DustOptions(this.blastInitialColor, this.blastParticleSize + 0.2F);
         target.getWorld().spawnParticle(Particle.DUST, target.getLocation().add(0.0D, 1.0D, 0.0D), 25, 0.4D, 0.5D, 0.4D, 0.0D, hitEffectDust);
         target.getWorld().playSound(target.getLocation(), Sound.BLOCK_AZALEA_LEAVES_HIT, 1.0F, 1.0F);
+        // Level 3+: extra nature particles on mark
+        if (sl.getLevel() >= 3) {
+            target.getWorld().spawnParticle(Particle.SPORE_BLOSSOM_AIR, target.getLocation().add(0, 1, 0), 15, 0.4, 0.5, 0.4, 0.08);
+        }
     }
 
     private void setCooldown(Player player) {
@@ -270,7 +284,7 @@ public class AmbushSlashAbility implements Ability {
 
     }
 
-    private void executeStage2(Player caster, LivingEntity target) {
+    private void executeStage2(Player caster, LivingEntity target, SpellLevel sl) {
         UUID casterUUID = caster.getUniqueId();
         World world = target.getWorld();
         Location targetLoc = target.getLocation();
@@ -284,7 +298,6 @@ public class AmbushSlashAbility implements Ability {
             foundGround = true;
         } else {
             Location groundCheckLoc = blockBelowDest.getLocation();
-
             for(int i = 0; i < 3; ++i) {
                 Block nextBlockBelow = groundCheckLoc.subtract(0.0D, 1.0D, 0.0D).getBlock();
                 if (nextBlockBelow.getType().isSolid()) {
@@ -292,10 +305,7 @@ public class AmbushSlashAbility implements Ability {
                     foundGround = true;
                     break;
                 }
-
-                if (nextBlockBelow.getY() < world.getMinHeight()) {
-                    break;
-                }
+                if (nextBlockBelow.getY() < world.getMinHeight()) break;
             }
         }
 
@@ -311,26 +321,36 @@ public class AmbushSlashAbility implements Ability {
             world.spawnParticle(Particle.TOTEM_OF_UNDYING, preTeleportLoc.add(0.0D, 1.0D, 0.0D), 30, 0.3D, 0.5D, 0.3D, 0.1D);
             world.playSound(preTeleportLoc, Sound.ENTITY_ENDERMAN_TELEPORT, 0.8F, 0.8F);
             caster.teleport(teleportDest);
+
             world.spawnParticle(Particle.DUST, teleportDest, 50, 0.5D, 0.5D, 0.5D, 0.0D, teleportDust);
             world.spawnParticle(Particle.TOTEM_OF_UNDYING, targetLoc.add(0.0D, 1.0D, 0.0D), 40, 0.4D, 0.5D, 0.4D, 0.2D);
             world.spawnParticle(Particle.SPORE_BLOSSOM_AIR, targetLoc.add(0.0D, 1.0D, 0.0D), 20, 0.4D, 0.5D, 0.4D, 0.1D);
             world.playSound(teleportDest, Sound.ENTITY_ENDERMAN_TELEPORT, 1.0F, 1.2F);
-            Spellbreak.getInstance().getAbilityDamage().damage(target, this.stage2Damage, caster, this, (String)null);
-            this.applyNatureBurn(target, caster);
+
+            double scaledStage2Dmg = this.stage2Damage * sl.getDamageMultiplier();
+            Spellbreak.getInstance().getAbilityDamage().damage(target, scaledStage2Dmg, caster, this, null);
+
+            // Level 3+: extra cherry leaf burst at teleport-behind
+            if (sl.getLevel() >= 3) {
+                world.spawnParticle(Particle.CHERRY_LEAVES, targetLoc.clone(), 20, 0.8, 0.8, 0.8, 0.15);
+                world.playSound(targetLoc.clone(), Sound.BLOCK_CHERRY_LEAVES_BREAK, 1.0f, 1.2f);
+            }
+
+            // Level 5: wider nature burn
+            double scaledBurnRadius = (sl.getLevel() >= 5) ? this.natureBurnSpreadRadius * 2.0 : this.natureBurnSpreadRadius;
+            this.applyNatureBurnScaled(target, caster, scaledBurnRadius);
+
             world.playSound(target.getLocation(), Sound.ENTITY_PLAYER_ATTACK_CRIT, 1.0F, 0.9F);
             world.playSound(target.getLocation(), Sound.BLOCK_GRASS_BREAK, 0.8F, 1.2F);
+
             Location casterEyeLoc = caster.getEyeLocation();
             Vector direction = casterEyeLoc.getDirection().normalize();
             Vector perpendicular = (new Vector(-direction.getZ(), 0.0D, direction.getX())).normalize();
-            if (perpendicular.lengthSquared() < 0.01D) {
-                perpendicular = new Vector(1, 0, 0);
-            }
-
+            if (perpendicular.lengthSquared() < 0.01D) perpendicular = new Vector(1, 0, 0);
             Vector up = direction.clone().crossProduct(perpendicular).normalize();
             Location center = casterEyeLoc.add(direction.multiply(1.0D));
             int pointsPerLine = 8;
             double lineLength = 1.8D;
-
             for(int i = -pointsPerLine / 2; i <= pointsPerLine / 2; ++i) {
                 if (i != 0) {
                     double scale = (double)i / ((double)pointsPerLine / 2.0D) * (lineLength / 2.0D);
@@ -346,15 +366,17 @@ public class AmbushSlashAbility implements Ability {
                     world.spawnParticle(Particle.DUST, loc2, 1, 0.05D, 0.05D, 0.05D, 0.0D, teleportDust);
                 }
             }
-
             this.clearMark(casterUUID);
             this.setCooldown(caster);
             this.successfulActivation = true;
         }
-
     }
 
     private void applyNatureBurn(final LivingEntity target, final Player caster) {
+        applyNatureBurnScaled(target, caster, this.natureBurnSpreadRadius);
+    }
+
+    private void applyNatureBurnScaled(final LivingEntity target, final Player caster, double spreadRadius) {
         target.addPotionEffect(new PotionEffect(PotionEffectType.POISON, this.natureBurnDurationTicks, this.natureBurnAmplifier, false, true, true));
         target.setMetadata("NatureBurnSource", new FixedMetadataValue(Spellbreak.getInstance(), caster.getUniqueId()));
         (new BukkitRunnable() {
@@ -365,7 +387,6 @@ public class AmbushSlashAbility implements Ability {
                         target.removeMetadata("NatureBurnSource", Spellbreak.getInstance());
                     }
                 }
-
             }
         }).runTaskLater(Spellbreak.getInstance(), (long)this.natureBurnDurationTicks + 10L);
     }
@@ -452,7 +473,11 @@ public class AmbushSlashAbility implements Ability {
     }
 
     private void handleEntityHitAndEndProjectile(Player caster, LivingEntity target) {
-        this.handleEntityHit(caster, target);
+        // Fallback: use base damage (no level scaling in this path)
+        this.handleEntityHitWithLevel(caster, target, this.stage1Damage, Spellbreak.getInstance().getLevelManager()
+                .getSpellLevel(caster.getUniqueId(),
+                        Spellbreak.getInstance().getPlayerDataManager().getPlayerClass(caster.getUniqueId()),
+                        getName()));
         this.setActiveProjectile(caster.getUniqueId(), false);
     }
 
