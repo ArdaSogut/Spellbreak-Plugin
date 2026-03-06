@@ -44,7 +44,7 @@ classes:
       - WardingSigil
       - Runecarver
       - RunicJumpPad
-      - RunicCannon
+      - RunicTurret
       - BladeSpin
       - SwarmSigil
   Starcaller:

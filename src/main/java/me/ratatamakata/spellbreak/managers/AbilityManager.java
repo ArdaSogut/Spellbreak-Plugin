@@ -76,7 +76,6 @@ public class AbilityManager {
         register(new QuantumAnchorAbility());
         register(new SolarLanceAbility());
 
-
         map.values().forEach(Ability::loadConfig);
     }
     private void register(Ability a) {

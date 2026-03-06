@@ -95,7 +95,7 @@ public final class Spellbreak extends JavaPlugin implements Listener {
         getServer().getPluginManager().registerEvents(new HealingListener(), this);
         getServer().getPluginManager().registerEvents(stunHandler, this);
         getServer().getPluginManager().registerEvents(new BoneChoirListener(), this);
-        getServer().getPluginManager().registerEvents(new CustomDeathMessageListener(this), this);
+        // Note: CustomDeathMessageListener is registered inside setupDamageTracking(), not here
         getServer().getPluginManager().registerEvents(new NatureStepListener(), this);
         getServer().getPluginManager().registerEvents(new FallDamageListener(), this);
         getServer().getPluginManager().registerEvents(new AmbushSlashListener(this), this);
@@ -120,7 +120,8 @@ public final class Spellbreak extends JavaPlugin implements Listener {
         getServer().getPluginManager().registerEvents(new GaleVortexListener(), this);
         getServer().getPluginManager().registerEvents(new EarthShardsListener(this), this);
         getServer().getPluginManager().registerEvents(new AvalancheListener(), this);
-        ThunderSlamAbility thunderSlam = new ThunderSlamAbility();
+        // Re-use the ThunderSlamAbility instance already registered in AbilityManager (avoids duplicate state)
+        ThunderSlamAbility thunderSlam = (ThunderSlamAbility) abilityManager.getAbilityByName("thunderslam");
         getServer().getPluginManager().registerEvents(new ThunderSlamListener(this, thunderSlam), this);
         getServer().getPluginManager().registerEvents(new WardingSigilListener(), this);
         getServer().getPluginManager().registerEvents(new RunecarverListener(), this);
@@ -138,6 +139,7 @@ public final class Spellbreak extends JavaPlugin implements Listener {
         getServer().getPluginManager().registerEvents(new PhotonBeamListener(), this);
         getServer().getPluginManager().registerEvents(new QuantumAnchorListener(), this);
         getServer().getPluginManager().registerEvents(new SolarLanceListener(), this);
+
 
 
         getCommand("bind").setExecutor(new BindCommand());
