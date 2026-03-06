@@ -2,6 +2,7 @@ package me.ratatamakata.spellbreak.abilities.impl;
 
 import me.ratatamakata.spellbreak.Spellbreak;
 import me.ratatamakata.spellbreak.abilities.Ability;
+import me.ratatamakata.spellbreak.level.SpellLevel;
 import me.ratatamakata.spellbreak.managers.PlayerDataManager;
 import net.md_5.bungee.api.ChatMessageType;
 import net.md_5.bungee.api.chat.TextComponent;
@@ -82,11 +83,19 @@ public class BeaconOfClarityAbility implements Ability {
     public void activate(Player player, String playerClass) {
         UUID casterId = player.getUniqueId();
 
+        SpellLevel sl = Spellbreak.getInstance().getLevelManager()
+                .getSpellLevel(casterId, playerClass, getName());
+
         // Toggle off existing beacon
         if (beaconLocations.containsKey(casterId)) {
             removeBeaconFor(casterId, player.getWorld());
             return;
         }
+
+        final double scaledHeal        = healAmount  * sl.getDamageMultiplier();
+        final double scaledMaxHeal     = maxTotalHealPerAlly * sl.getDamageMultiplier();
+        final double scaledRadius      = beaconRadius * sl.getRangeMultiplier();
+        final int    scaledDuration    = (int)(durationTicks * sl.getDurationMultiplier());
 
         casterClasses.put(casterId, playerClass);
         healProgress.put(casterId, new HashMap<>());
@@ -117,11 +126,19 @@ public class BeaconOfClarityAbility implements Ability {
         });
         beaconEntityIds.put(casterId, marker.getUniqueId());
 
-        // Divine activation sequence
-        player.getWorld().playSound(loc, Sound.BLOCK_BELL_USE, 1.8f, 1.6f);
+        float activatePitch = 0.8f + sl.getLevel() * 0.05f;
+        player.getWorld().playSound(loc, Sound.BLOCK_BELL_USE, 1.8f, activatePitch);
         player.getWorld().playSound(loc, Sound.BLOCK_BEACON_ACTIVATE, 1.5f, 0.8f);
         player.getWorld().playSound(loc, Sound.ITEM_TRIDENT_RETURN, 1.2f, 1.4f);
         player.getWorld().playSound(loc, Sound.ENTITY_EVOKER_CAST_SPELL, 0.8f, 1.8f);
+        // Level 3+: ring of FIREWORK on placement
+        if (sl.getLevel() >= 3) {
+            for (int j = 0; j < 24; j++) {
+                double ta = 2 * Math.PI * j / 24;
+                Location p = loc.clone().add(Math.cos(ta)*2, 0.2, Math.sin(ta)*2);
+                p.getWorld().spawnParticle(Particle.FIREWORK, p, 3, 0.1, 0.05, 0.1, 0.05);
+            }
+        }
 
         // Grand celestial activation
         for (int i = 0; i < 3; i++) {
@@ -154,21 +171,25 @@ public class BeaconOfClarityAbility implements Ability {
             int ticks = 0;
             @Override public void run() {
                 Location bcLoc = beaconLocations.get(casterId);
-                if (bcLoc == null || ticks >= durationTicks) {
+                if (bcLoc == null || ticks >= scaledDuration) {
                     removeBeaconFor(casterId, player.getWorld());
                     cancel();
                     return;
                 }
 
-                // Action bar timer
-                int secs = (durationTicks - ticks)/20;
+                int secs = (scaledDuration - ticks)/20;
                 player.spigot().sendMessage(ChatMessageType.ACTION_BAR,
-                        new TextComponent("§e✦ §6§lBEACON OF CLARITY §e✦ §7[§6" + secs + "s§7]"));
+                        new TextComponent("§e✦ §6§lBEACON OF CLARITY §e✦ §7[§6" + secs + "s§7][Lv" + sl.getLevel() + "]"));
 
                 PlayerDataManager pdm = Spellbreak.getInstance().getPlayerDataManager();
                 boolean isLB = "lightbringer".equalsIgnoreCase(casterClasses.get(casterId));
 
-                for (Entity e : player.getWorld().getNearbyEntities(bcLoc, beaconRadius, beaconRadius, beaconRadius)) {
+                // Level 5: HEART pulse every 2s
+                if (sl.getLevel() >= 5 && ticks % 40 == 0 && ticks > 0) {
+                    bcLoc.getWorld().spawnParticle(Particle.HEART, bcLoc.clone().add(0,1.5,0), 12, scaledRadius*0.5, 0.3, scaledRadius*0.5, 0.1);
+                }
+
+                for (Entity e : player.getWorld().getNearbyEntities(bcLoc, scaledRadius, scaledRadius, scaledRadius)) {
                     if (!(e instanceof Player)) continue;
                     Player ally = (Player) e;
                     UUID tid = ally.getUniqueId();
@@ -177,9 +198,8 @@ public class BeaconOfClarityAbility implements Ability {
                     String allyClass = pdm.getPlayerClass(tid);
                     boolean allyIsLB = "lightbringer".equalsIgnoreCase(allyClass);
 
-                    // Apply healing multipliers
-                    double effHeal = healAmount * (allyIsLB ? lightbringerHealMultiplier : 1);
-                    double effCap = maxTotalHealPerAlly * (allyIsLB ? lightbringerMaxHealMultiplier : 1);
+                    double effHeal = scaledHeal * (allyIsLB ? lightbringerHealMultiplier : 1);
+                    double effCap  = scaledMaxHeal * (allyIsLB ? lightbringerMaxHealMultiplier : 1);
 
                     double cur = ally.getHealth();
                     double max = ally.getAttribute(Attribute.MAX_HEALTH).getValue();

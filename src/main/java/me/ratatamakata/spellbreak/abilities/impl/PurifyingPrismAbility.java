@@ -2,6 +2,7 @@ package me.ratatamakata.spellbreak.abilities.impl;
 
 import me.ratatamakata.spellbreak.Spellbreak;
 import me.ratatamakata.spellbreak.abilities.Ability;
+import me.ratatamakata.spellbreak.level.SpellLevel;
 import me.ratatamakata.spellbreak.util.AbilityDamage;
 import org.bukkit.*;
 import org.bukkit.configuration.file.FileConfiguration;
@@ -68,11 +69,18 @@ public class PurifyingPrismAbility implements Ability {
     public void activate(Player player) {
         this.successfulActivation = false;
 
+        SpellLevel sl = Spellbreak.getInstance().getLevelManager()
+                .getSpellLevel(player.getUniqueId(),
+                        Spellbreak.getInstance().getPlayerDataManager().getPlayerClass(player.getUniqueId()),
+                        getName());
+
+        final double scaledDmg    = damagePerRay    * sl.getDamageMultiplier();
+        final double scaledRadius = raySearchRadius * sl.getRangeMultiplier();
+        final int    scaledRays   = maxRayInstances + (sl.getLevel() >= 5 ? 1 : 0);
+
         if (activePrisms.containsKey(player.getUniqueId())) {
             PurifyingPrismAbility existingPrism = activePrisms.get(player.getUniqueId());
-            if (existingPrism != null) {
-                existingPrism.deactivatePrism(false);
-            }
+            if (existingPrism != null) existingPrism.deactivatePrism(false);
         }
 
         this.caster = player;
@@ -111,19 +119,14 @@ public class PurifyingPrismAbility implements Ability {
 
                 spawnParticleAtRel.accept(top);
                 spawnParticleAtRel.accept(bottom);
-                for (Vector eqPoint : equatorial) {
-                    spawnParticleAtRel.accept(eqPoint);
-                }
+                for (Vector eqPoint : equatorial) spawnParticleAtRel.accept(eqPoint);
 
-                for (Vector eqPoint : equatorial) {
+                for (Vector eqPoint : equatorial)
                     drawEdge(currentPrismCenterLocation, top, eqPoint, prismVisualParticleCount / 4, world, prismBodyParticle);
-                }
-                for (Vector eqPoint : equatorial) {
+                for (Vector eqPoint : equatorial)
                     drawEdge(currentPrismCenterLocation, bottom, eqPoint, prismVisualParticleCount / 4, world, prismBodyParticle);
-                }
-                for (int i = 0; i < equatorial.length; i++) {
+                for (int i = 0; i < equatorial.length; i++)
                     drawEdge(currentPrismCenterLocation, equatorial[i], equatorial[(i + 1) % equatorial.length], prismVisualParticleCount / 4, world, prismBodyParticle);
-                }
             }
         }.runTaskTimer(Spellbreak.getInstance(), 0L, 3L);
 
@@ -137,31 +140,36 @@ public class PurifyingPrismAbility implements Ability {
 
                 if (caster.isOnline()) {
                     double timeRemaining = (prismDurationTicks - currentPrismTick) / 20.0;
-                    int raysRemaining = maxRayInstances - raysFiredCount;
-                    String actionBarMsg = String.format("§bPrism: §f%.1fs §7| §e%d rays left", Math.max(0, timeRemaining), raysRemaining);
-                    caster.spigot().sendMessage(ChatMessageType.ACTION_BAR, TextComponent.fromLegacyText(actionBarMsg));
+                    int raysRemaining = scaledRays - raysFiredCount;
+                    String info = String.format("§bPrism: §f%.1fs §7| §e%d rays [Lv%d]", Math.max(0, timeRemaining), raysRemaining, sl.getLevel());
+                    caster.spigot().sendMessage(ChatMessageType.ACTION_BAR, TextComponent.fromLegacyText(info));
                 }
 
                 currentPrismTick += rayFireIntervalTicks;
 
-                if (raysFiredCount >= maxRayInstances || currentPrismTick > prismDurationTicks) {
+                if (raysFiredCount >= scaledRays || currentPrismTick > prismDurationTicks) {
                     deactivatePrism(true);
                     return;
                 }
 
                 World world = caster.getWorld();
-                LivingEntity target = findTarget();
+                LivingEntity target = findTargetScaled(scaledRadius);
                 if (target != null) {
                     drawRayBetweenPoints(currentPrismCenterLocation, target.getEyeLocation(), damageRayParticle, world);
-                    abilityDamage.damage(target, damagePerRay, caster, PurifyingPrismAbility.this, "PurifyingPrism");
+                    abilityDamage.damage(target, scaledDmg, caster, PurifyingPrismAbility.this, "PurifyingPrism");
                     world.playSound(currentPrismCenterLocation, Sound.ENTITY_BLAZE_SHOOT, 0.7f, 1.6f);
                     world.playSound(target.getLocation(), Sound.ENTITY_PLAYER_HURT, 0.8f, 1.0f);
+                    // Level 3+: FLASH pulse on ray hit
+                    if (sl.getLevel() >= 3) {
+                        world.spawnParticle(Particle.FLASH, target.getEyeLocation(), 1, 0.1, 0.1, 0.1, 0.02);
+                    }
                     raysFiredCount++;
                 }
             }
         }.runTaskTimer(Spellbreak.getInstance(), rayFireIntervalTicks, rayFireIntervalTicks);
 
-        caster.getWorld().playSound(currentPrismCenterLocation, Sound.BLOCK_BEACON_ACTIVATE, 1.0f, 1.5f);
+        float activatePitch = 1.5f + sl.getLevel() * 0.05f;
+        caster.getWorld().playSound(currentPrismCenterLocation, Sound.BLOCK_BEACON_ACTIVATE, 1.0f, activatePitch);
         this.successfulActivation = true;
     }
 
@@ -222,10 +230,9 @@ public class PurifyingPrismAbility implements Ability {
         return String.format("§e%s §bwas obliterated by §e%s§b's prismatic energy.", victimName, casterName);
     }
 
-    private LivingEntity findTarget() {
+    private LivingEntity findTargetScaled(double radius) {
         if (caster == null || currentPrismCenterLocation == null) return null;
-
-        return caster.getWorld().getNearbyEntities(currentPrismCenterLocation, raySearchRadius, raySearchRadius, raySearchRadius)
+        return caster.getWorld().getNearbyEntities(currentPrismCenterLocation, radius, radius, radius)
                 .stream()
                 .filter(e -> e instanceof LivingEntity &&
                         !e.equals(caster) &&
@@ -237,6 +244,10 @@ public class PurifyingPrismAbility implements Ability {
                         e2.getLocation().distanceSquared(currentPrismCenterLocation)
                 ))
                 .orElse(null);
+    }
+
+    private LivingEntity findTarget() {
+        return findTargetScaled(raySearchRadius);
     }
 
     private void drawRayBetweenPoints(Location start, Location end, Particle.DustOptions dust, World world) {

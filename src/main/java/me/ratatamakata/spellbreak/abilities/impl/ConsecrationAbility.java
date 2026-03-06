@@ -2,6 +2,7 @@ package me.ratatamakata.spellbreak.abilities.impl;
 
 import me.ratatamakata.spellbreak.Spellbreak;
 import me.ratatamakata.spellbreak.abilities.Ability;
+import me.ratatamakata.spellbreak.level.SpellLevel;
 import org.bukkit.*;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.entity.LivingEntity;
@@ -62,15 +63,28 @@ public class ConsecrationAbility implements Ability {
 
     @Override
     public void activate(Player player) {
-        final Ability ability = this; // Add this line
-        this.successfulActivation = false; // Reset at the start of activation
-        this.successfulActivation = true; // Ensure ability is considered successful for cooldown/mana purposes
+        final Ability ability = this;
+        this.successfulActivation = false;
+        this.successfulActivation = true;
+
+        SpellLevel sl = Spellbreak.getInstance().getLevelManager()
+                .getSpellLevel(player.getUniqueId(),
+                        Spellbreak.getInstance().getPlayerDataManager().getPlayerClass(player.getUniqueId()),
+                        getName());
+
+        final double scaledDamage = damageAmount * sl.getDamageMultiplier();
+        final double scaledRadius = liftRadius   * sl.getRangeMultiplier();
 
         World world = player.getWorld();
         Location center = player.getLocation();
 
-        world.playSound(center, Sound.ENTITY_EVOKER_PREPARE_SUMMON, 1.2f, 0.8f);
+        float castPitch = 0.8f + sl.getLevel() * 0.05f;
+        world.playSound(center, Sound.ENTITY_EVOKER_PREPARE_SUMMON, 1.2f, castPitch);
         world.playSound(center, Sound.BLOCK_BEACON_ACTIVATE, 1.0f, 1.0f);
+        // Level 5: extra divine thunder
+        if (sl.getLevel() >= 5) {
+            world.playSound(center, Sound.ENTITY_LIGHTNING_BOLT_THUNDER, 0.6f, 2.0f);
+        }
 
         // Initial ground particles (starburst with outer circle)
         new BukkitRunnable() {
@@ -121,27 +135,21 @@ public class ConsecrationAbility implements Ability {
             }
         }.runTaskTimer(Spellbreak.getInstance(), 0L, 1L);
 
-        List<LivingEntity> targets = world.getNearbyEntities(center, liftRadius, liftRadius, liftRadius)
+        List<LivingEntity> targets = world.getNearbyEntities(center, scaledRadius, scaledRadius, scaledRadius)
                 .stream()
                 .filter(e -> e instanceof LivingEntity && !e.equals(player) && !e.isDead() && !(e instanceof org.bukkit.entity.ArmorStand))
                 .map(e -> (LivingEntity) e)
                 .collect(Collectors.toList());
 
         if (targets.isEmpty()) {
-            Spellbreak.getInstance().getLogger().info("[Consecration DEBUG] No targets found for Consecration by " + player.getName() + " at " + center);
             player.getWorld().playSound(center, Sound.BLOCK_FIRE_EXTINGUISH, 1f, 1f);
-            // successfulActivation is true, so cooldown will apply, but the rest of the target-specific logic is skipped.
             return;
         }
 
-        Spellbreak.getInstance().getLogger().info("[Consecration DEBUG] " + player.getName() + " found " + targets.size() + " target(s) for Consecration.");
-        // this.successfulActivation = true; // Already set earlier
         player.getWorld().playSound(center, Sound.ENTITY_ILLUSIONER_CAST_SPELL, 1f, 1.2f);
 
-
         for (LivingEntity target : targets) {
-            Spellbreak.getInstance().getAbilityDamage().damage(target, damageAmount/2, player, this, null); // Initial damage on lift
-            // The old setLastAttacker call is removed as the listener handles it via the tag on caster
+            Spellbreak.getInstance().getAbilityDamage().damage(target, scaledDamage/2, player, this, null);
 
             final Location originalLocation = target.getLocation();
             final Vector toCenter = center.toVector().subtract(originalLocation.toVector()).normalize().multiply(0.2);
@@ -170,12 +178,15 @@ public class ConsecrationAbility implements Ability {
                                 @Override
                                 public void run() {
                                     if(target.isOnGround() || target.getLocation().getY() <= groundLocation.getY() + 0.5){
-                                        Spellbreak.getInstance().getAbilityDamage().damage(target, damageAmount/2, player, ConsecrationAbility.this, null);
+                                        Spellbreak.getInstance().getAbilityDamage().damage(target, scaledDamage/2, player, ConsecrationAbility.this, null);
                                         world.playSound(groundLocation, Sound.ENTITY_GENERIC_EXPLODE, 1.0f, 0.7f);
                                         world.playSound(groundLocation, Sound.BLOCK_STONE_BREAK, 1.2f, 0.8f);
-                                        // Slam particles (Holy Dust)
                                         world.spawnParticle(Particle.DUST, groundLocation.clone().add(0, 0.2, 0), 80, 0.7, 0.2, 0.7, 0.05, holyDustOptions);
                                         world.spawnParticle(Particle.DUST, groundLocation.clone().add(0, 0.5, 0), 50, 0.5, 0.5, 0.5, 0.02, holyDustOptions);
+                                        // Level 5: FLASH slam burst
+                                        if (sl.getLevel() >= 5) {
+                                            world.spawnParticle(Particle.FLASH, groundLocation.clone().add(0,0.5,0), 3, 0.3, 0.1, 0.3, 0.05);
+                                        }
                                         this.cancel();
                                     } else if (!target.isValid() || target.isDead()){
                                         this.cancel();

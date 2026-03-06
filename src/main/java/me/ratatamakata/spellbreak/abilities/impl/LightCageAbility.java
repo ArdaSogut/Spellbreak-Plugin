@@ -3,6 +3,7 @@ package me.ratatamakata.spellbreak.abilities.impl;
 
 import me.ratatamakata.spellbreak.Spellbreak;
 import me.ratatamakata.spellbreak.abilities.Ability;
+import me.ratatamakata.spellbreak.level.SpellLevel;
 import me.ratatamakata.spellbreak.listeners.StunHandler;
 // import me.ratatamakata.spellbreak.util.ProjectileUtil; // Removed import
 import org.bukkit.*;
@@ -67,31 +68,54 @@ public class LightCageAbility implements Ability {
     @Override
     public void activate(Player player) {
         this.successfulActivation = false;
-        Location spawnLoc = player.getEyeLocation().add(0, -0.2, 0); // Slightly lower origin
-        Vector direction = player.getEyeLocation().getDirection().normalize();
-        
-        player.getWorld().playSound(player.getLocation(), Sound.ENTITY_EVOKER_CAST_SPELL, 1f, 1.5f);
-        player.getWorld().spawnParticle(Particle.FLASH, spawnLoc, 3, 0.1, 0.1, 0.1, 0.05); // Initial flash
 
-        // Define the entity filter predicate here to pass to the runnable
-        Predicate<Entity> entityFilter = entity -> 
-            entity instanceof LivingEntity && 
-            !entity.getUniqueId().equals(player.getUniqueId()) && 
-            !entity.isDead() && 
+        SpellLevel sl = Spellbreak.getInstance().getLevelManager()
+                .getSpellLevel(player.getUniqueId(),
+                        Spellbreak.getInstance().getPlayerDataManager().getPlayerClass(player.getUniqueId()),
+                        getName());
+
+        // Store scaled values for this cast, pass them on
+        final double scaledInitialDamage = initialDamage * sl.getDamageMultiplier();
+        final double scaledTickDamage    = tickDamage    * sl.getDamageMultiplier();
+        final double scaledRange         = range         * sl.getRangeMultiplier();
+
+        Location spawnLoc = player.getEyeLocation().add(0, -0.2, 0);
+        Vector direction = player.getEyeLocation().getDirection().normalize();
+
+        float launchPitch = 1.5f + sl.getLevel() * 0.05f;
+        player.getWorld().playSound(player.getLocation(), Sound.ENTITY_EVOKER_CAST_SPELL, 1f, launchPitch);
+        player.getWorld().spawnParticle(Particle.FLASH, spawnLoc, 3, 0.1, 0.1, 0.1, 0.05);
+        // Level 3+: extra launch sparkle
+        if (sl.getLevel() >= 3) {
+            player.getWorld().spawnParticle(Particle.END_ROD, spawnLoc, 6, 0.15, 0.15, 0.15, 0.05);
+        }
+
+        Predicate<Entity> entityFilter = entity ->
+            entity instanceof LivingEntity &&
+            !entity.getUniqueId().equals(player.getUniqueId()) &&
+            !entity.isDead() &&
             !(entity instanceof org.bukkit.entity.ArmorStand);
 
-        new LightCageProjectileRunnable(player, spawnLoc, direction, entityFilter).runTaskTimer(Spellbreak.getInstance(), 0L, 1L);
-        // isSuccessful will be set by the runnable upon successful cage creation
+        new LightCageProjectileRunnable(player, spawnLoc, direction, entityFilter,
+                scaledInitialDamage, scaledTickDamage, scaledRange, sl)
+                .runTaskTimer(Spellbreak.getInstance(), 0L, 1L);
     }
 
-    public void createCage(Location center, Player caster) {
-        this.successfulActivation = true; // Mark successful activation when cage is created
+    public void createCage(Location center, Player caster, double scaledInitialDmg, double scaledTickDmg, SpellLevel sl) {
+        this.successfulActivation = true;
         World world = center.getWorld();
         StunHandler stunHandler = Spellbreak.getInstance().getStunHandler();
 
-        world.playSound(center, Sound.BLOCK_BEACON_ACTIVATE, 1f, 0.8f);
+        float cagePitch = 0.8f + sl.getLevel() * 0.05f;
+        world.playSound(center, Sound.BLOCK_BEACON_ACTIVATE, 1f, cagePitch);
         world.spawnParticle(Particle.FLASH, center, 5, radius * 0.7, height * 0.3, radius * 0.7, 0.1);
+        // Level 5: TOTEM flash on cage creation
+        if (sl.getLevel() >= 5) {
+            world.spawnParticle(Particle.TOTEM_OF_UNDYING, center.clone().add(0,1,0), 20, 0.5, 0.5, 0.5, 0.3);
+            world.playSound(center, Sound.ENTITY_PLAYER_LEVELUP, 0.8f, 2.0f);
+        }
 
+        int scaledStunTicks = (int)(durationTicks * sl.getDurationMultiplier());
 
         Collection<LivingEntity> targets = world.getNearbyEntities(center, radius, height / 2, radius,
                         e -> e instanceof LivingEntity && e != caster && !(e instanceof org.bukkit.entity.ArmorStand) && !e.isDead())
@@ -99,12 +123,11 @@ public class LightCageAbility implements Ability {
                 .map(e -> (LivingEntity) e)
                 .collect(Collectors.toList());
 
-
         for (LivingEntity target : targets) {
-            Spellbreak.getInstance().getAbilityDamage().damage(target, initialDamage, caster, this, null);
-            stunHandler.stun(target, durationTicks);
+            Spellbreak.getInstance().getAbilityDamage().damage(target, scaledInitialDmg, caster, this, null);
+            stunHandler.stun(target, scaledStunTicks);
             target.setVelocity(new Vector(0, 0.3, 0));
-            world.spawnParticle(Particle.CRIT, target.getEyeLocation(), 10, 0.3, 0.3, 0.3, 0.1); // Linter error here if MAGIC_CRIT invalid
+            world.spawnParticle(Particle.CRIT, target.getEyeLocation(), 10, 0.3, 0.3, 0.3, 0.1);
         }
 
         new BukkitRunnable() {
@@ -113,7 +136,7 @@ public class LightCageAbility implements Ability {
 
             @Override
             public void run() {
-                if (ticks >= durationTicks) {
+                if (ticks >= scaledStunTicks) {
                     world.playSound(cageCenter, Sound.BLOCK_GLASS_BREAK, 1f, 1.2f);
                     spawnStaticCageParticles(cageCenter, true);
                     cancel();
@@ -121,6 +144,10 @@ public class LightCageAbility implements Ability {
                 }
 
                 spawnStaticCageParticles(cageCenter, false);
+                // Level 3+: END_ROD shimmer on cage bars every 2s
+                if (sl.getLevel() >= 3 && ticks % 40 == 0) {
+                    world.spawnParticle(Particle.END_ROD, cageCenter.clone().add(0,1,0), 8, radius*0.5, height*0.25, radius*0.5, 0.05);
+                }
 
                 if (ticks > 0 && ticks % 20 == 0) {
                     for (LivingEntity target : world.getNearbyEntities(cageCenter, radius, height / 2, radius,
@@ -128,13 +155,21 @@ public class LightCageAbility implements Ability {
                             .stream()
                             .map(e -> (LivingEntity) e)
                             .collect(Collectors.toList())) {
-                        Spellbreak.getInstance().getAbilityDamage().damage(target, tickDamage, caster, null, null);
+                        Spellbreak.getInstance().getAbilityDamage().damage(target, scaledTickDmg, caster, null, null);
                         world.spawnParticle(Particle.END_ROD, target.getEyeLocation(), 5, 0.2, 0.2, 0.2, 0.05);
                     }
                 }
                 ticks++;
             }
         }.runTaskTimer(Spellbreak.getInstance(), 0, 1);
+    }
+
+    // Backward-compat overload
+    public void createCage(Location center, Player caster) {
+        createCage(center, caster, initialDamage, tickDamage, Spellbreak.getInstance().getLevelManager()
+                .getSpellLevel(caster.getUniqueId(),
+                        Spellbreak.getInstance().getPlayerDataManager().getPlayerClass(caster.getUniqueId()),
+                        getName()));
     }
 
     private void spawnStaticCageParticles(Location center, boolean isBreakingEffect) {
@@ -165,21 +200,26 @@ public class LightCageAbility implements Ability {
         private final double speedPerTick;
         private final double maxTravelDistance;
         private double distanceTraveled;
-        private final double collisionRadius; // For entity checks primarily
-        // private final double collisionHeight; // Less critical with rayTraceEntities
-        private final Predicate<Entity> entityFilter; // Added field for the filter
+        private final double collisionRadius;
+        private final Predicate<Entity> entityFilter;
+        private final double scaledInitialDmg;
+        private final double scaledTickDmg;
+        private final SpellLevel sl;
 
-        public LightCageProjectileRunnable(Player caster, Location origin, Vector direction, Predicate<Entity> filter) {
+        public LightCageProjectileRunnable(Player caster, Location origin, Vector direction, Predicate<Entity> filter,
+                double scaledInitialDmg, double scaledTickDmg, double scaledRange, SpellLevel sl) {
             this.caster = caster;
             this.world = origin.getWorld();
             this.currentLocation = origin.clone();
-            this.direction = direction.clone(); 
+            this.direction = direction.clone();
             this.speedPerTick = LightCageAbility.this.projectileSpeed;
-            this.maxTravelDistance = LightCageAbility.this.range;
+            this.maxTravelDistance = scaledRange;
             this.distanceTraveled = 0;
             this.collisionRadius = LightCageAbility.this.radius;
-            // this.collisionHeight = LightCageAbility.this.height;
-            this.entityFilter = filter; // Store the filter
+            this.entityFilter = filter;
+            this.scaledInitialDmg = scaledInitialDmg;
+            this.scaledTickDmg = scaledTickDmg;
+            this.sl = sl;
         }
 
         @Override
@@ -210,7 +250,7 @@ public class LightCageAbility implements Ability {
             RayTraceResult entityHitResult = world.rayTraceEntities(currentLocation, direction, speedPerTick, collisionRadius, this.entityFilter);
             if (entityHitResult != null && entityHitResult.getHitEntity() instanceof LivingEntity) {
                 LivingEntity hitEntity = (LivingEntity) entityHitResult.getHitEntity();
-                LightCageAbility.this.createCage(hitEntity.getLocation(), caster); 
+                LightCageAbility.this.createCage(hitEntity.getLocation(), caster, scaledInitialDmg, scaledTickDmg, sl);
                 world.playSound(hitEntity.getLocation(), Sound.ENTITY_ILLUSIONER_MIRROR_MOVE, 1.0f, 1.2f);
                 this.cancel();
                 return;

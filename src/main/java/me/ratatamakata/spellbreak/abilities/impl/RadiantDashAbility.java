@@ -2,6 +2,7 @@ package me.ratatamakata.spellbreak.abilities.impl;
 
 import me.ratatamakata.spellbreak.Spellbreak;
 import me.ratatamakata.spellbreak.abilities.Ability;
+import me.ratatamakata.spellbreak.level.SpellLevel;
 import org.bukkit.Color;
 import org.bukkit.Location;
 import org.bukkit.Particle;
@@ -86,23 +87,27 @@ public class RadiantDashAbility implements Ability {
     public void activate(Player player) {
         UUID uuid = player.getUniqueId();
 
-        // Remember original flight perms
+        SpellLevel sl = Spellbreak.getInstance().getLevelManager()
+                .getSpellLevel(uuid,
+                        Spellbreak.getInstance().getPlayerDataManager().getPlayerClass(uuid),
+                        getName());
+
+        final double scaledSpeed     = flightSpeed    * sl.getRangeMultiplier();
+        final int    scaledMaxTicks  = (int)(maxFlightTicks * sl.getDurationMultiplier());
+
         allowedFlight.put(uuid, player.getAllowFlight());
         wasFlying.put(uuid,     player.isFlying());
-
         successfulActivation = true;
 
-        // Grant dash-only flight
         player.setAllowFlight(true);
         player.setFlying(true);
 
-        player.getWorld().playSound(player.getLocation(), Sound.ENTITY_PLAYER_SPLASH, .8f, 1.5f);
+        float launchPitch = 1.5f + sl.getLevel() * 0.05f;
+        player.getWorld().playSound(player.getLocation(), Sound.ENTITY_PLAYER_SPLASH, .8f, launchPitch);
 
         if (negateDebuffs) {
             for (PotionEffect e : player.getActivePotionEffects()) {
-                if (NEGATIVE_EFFECTS.contains(e.getType())) {
-                    player.removePotionEffect(e.getType());
-                }
+                if (NEGATIVE_EFFECTS.contains(e.getType())) player.removePotionEffect(e.getType());
             }
             player.getWorld().playSound(player.getLocation(), Sound.BLOCK_BEACON_POWER_SELECT, 1f, 1.5f);
         }
@@ -112,31 +117,38 @@ public class RadiantDashAbility implements Ability {
 
             @Override
             public void run() {
-                if (!player.isOnline() || player.isDead() || ticksFlown >= maxFlightTicks) {
-                    // Restore original flight perms
+                if (!player.isOnline() || player.isDead() || ticksFlown >= scaledMaxTicks) {
                     boolean origAllow = allowedFlight.remove(uuid);
                     boolean origFly   = wasFlying.remove(uuid);
-
                     player.setAllowFlight(origAllow);
                     player.setFlying(origFly && origAllow);
 
-                    player.getWorld().playSound(player.getLocation(), Sound.ENTITY_FIREWORK_ROCKET_TWINKLE, .7f, 1.2f);
+                    // Level 5: FIREWORK burst on flight end
+                    if (sl.getLevel() >= 5) {
+                        player.getWorld().spawnParticle(Particle.FIREWORK, player.getLocation(), 20, 0.4, 0.4, 0.4, 0.1);
+                        player.getWorld().playSound(player.getLocation(), Sound.ENTITY_FIREWORK_ROCKET_BLAST, 0.8f, 1.5f);
+                    } else {
+                        player.getWorld().playSound(player.getLocation(), Sound.ENTITY_FIREWORK_ROCKET_TWINKLE, .7f, 1.2f);
+                    }
                     cancel();
                     return;
                 }
 
-                // Propel forward
                 Vector dir = player.getLocation().getDirection().normalize();
-                player.setVelocity(dir.multiply(flightSpeed));
+                player.setVelocity(dir.multiply(scaledSpeed));
 
-                // Trail particles
                 if (ticksFlown % 2 == 0) {
                     player.getWorld().spawnParticle(Particle.DUST,
                             player.getLocation().subtract(0, .2, 0),
                             3, .1, .1, .1, 0, trailParticleOptions);
+                    // Level 3+: glowing END_ROD sparkles along trail
+                    if (sl.getLevel() >= 3) {
+                        player.getWorld().spawnParticle(Particle.END_ROD,
+                                player.getLocation().subtract(0, .2, 0),
+                                2, .2, .1, .2, 0.03);
+                    }
                 }
 
-                // Wing particles
                 spawnWingParticles(player);
                 ticksFlown++;
             }
