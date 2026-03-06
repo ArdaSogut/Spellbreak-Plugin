@@ -2,6 +2,7 @@ package me.ratatamakata.spellbreak.abilities.impl;
 
 import me.ratatamakata.spellbreak.Spellbreak;
 import me.ratatamakata.spellbreak.abilities.Ability;
+import me.ratatamakata.spellbreak.level.SpellLevel;
 import org.bukkit.*;
 import org.bukkit.block.Block;
 import org.bukkit.block.data.BlockData;
@@ -242,45 +243,38 @@ public class PlagueCloudAbility implements Ability {
             listenerRegistered = true;
         }
 
+        SpellLevel sl = Spellbreak.getInstance().getLevelManager()
+                .getSpellLevel(player.getUniqueId(),
+                        Spellbreak.getInstance().getPlayerDataManager().getPlayerClass(player.getUniqueId()),
+                        getName());
+
+        double scaledMaxRadius = maxRadius * sl.getRangeMultiplier();
+        int scaledDuration = (int)(duration * sl.getDurationMultiplier());
+
         Location spawnLocation = player.getLocation().add(0, 1, 0);
-        player.getWorld().playSound(
-                spawnLocation,
-                Sound.ENTITY_WITHER_SHOOT,
-                1.0f,
-                0.5f
-        );
+        float pitch = 0.5f + (sl.getLevel() * 0.1f);
+        player.getWorld().playSound(spawnLocation, Sound.ENTITY_WITHER_SHOOT, 1.0f, pitch);
+
+        // Level 3+: extra burst activation effect
+        if (sl.getLevel() >= 3) {
+            player.getWorld().spawnParticle(Particle.MYCELIUM, spawnLocation, 30, 1.5, 0.5, 1.5, 0.2);
+        }
 
         // Spawn an AEC with no vanilla visuals
         AreaEffectCloud cloud = (AreaEffectCloud) player.getWorld().spawnEntity(
-                spawnLocation,
-                EntityType.AREA_EFFECT_CLOUD
-        );
+                spawnLocation, EntityType.AREA_EFFECT_CLOUD);
 
-        // 1) Start at zero radius so the default white swirl never shows
         cloud.setRadius(0f);
-
-        // 2) Point its particle to AIR just in case
-        cloud.setParticle(
-                Particle.BLOCK_CRUMBLE,
-                Material.AIR.createBlockData()
-        );
-
-        // 3) Remove all built-in behaviors
+        cloud.setParticle(Particle.BLOCK_CRUMBLE, Material.AIR.createBlockData());
         cloud.clearCustomEffects();
         cloud.setRadiusOnUse(0);
         cloud.setRadiusPerTick(0);
-        cloud.setDuration(duration * 20);
+        cloud.setDuration(scaledDuration * 20);
         cloud.setColor(Color.BLACK);
         cloud.setReapplicationDelay(Integer.MAX_VALUE);
 
-        // 4) Kick off your custom behavior after the first interval,
-        //    so expandCloud() is the first thing to set a non-zero radius.
-        new CloudBehavior(cloud, player)
-                .runTaskTimer(
-                        Spellbreak.getInstance(),
-                        expansionInterval,
-                        expansionInterval
-                );
+        new CloudBehavior(cloud, player, scaledMaxRadius, scaledDuration, sl)
+                .runTaskTimer(Spellbreak.getInstance(), expansionInterval, expansionInterval);
     }
 
 
@@ -291,15 +285,21 @@ public class PlagueCloudAbility implements Ability {
         private final Map<UUID, BukkitTask> activeWithers = new HashMap<>();
         private int ticks = 0;
         private double currentRadius = 2.0;
+        private final double scaledMaxRadius;
+        private final int scaledDuration;
+        private final SpellLevel sl;
 
-        public CloudBehavior(AreaEffectCloud cloud, Player caster) {
+        public CloudBehavior(AreaEffectCloud cloud, Player caster, double scaledMaxRadius, int scaledDuration, SpellLevel sl) {
             this.cloud = cloud;
             this.caster = caster;
+            this.scaledMaxRadius = scaledMaxRadius;
+            this.scaledDuration = scaledDuration;
+            this.sl = sl;
         }
 
         @Override
         public void run() {
-            if (cloud.isDead() || ticks >= duration * 20) {
+            if (cloud.isDead() || ticks >= scaledDuration * 20) {
                 cleanup();
                 cancel();
                 return;
@@ -312,8 +312,8 @@ public class PlagueCloudAbility implements Ability {
         }
 
         private void expandCloud() {
-            if (currentRadius < maxRadius) {
-                currentRadius = Math.min(currentRadius + 2.5, maxRadius);
+            if (currentRadius < scaledMaxRadius) {
+                currentRadius = Math.min(currentRadius + 2.5, scaledMaxRadius);
                 cloud.setRadius((float) currentRadius);
                 processBlocks();
             }
@@ -386,12 +386,12 @@ public class PlagueCloudAbility implements Ability {
         }
 
         private void applyWitherEffect(LivingEntity target) {
-            // Cancel existing effect if reapplying
-            if (activeWithers.containsKey(target.getUniqueId())) {
-                return;
-            }
+            if (activeWithers.containsKey(target.getUniqueId())) return;
 
-            // Start new wither task
+            // Level 5: wither ticks every 1s instead of 2s
+            int witherTickInterval = (sl.getLevel() >= 5) ? 20 : 40;
+            double witherDmg = 1.0 * sl.getDamageMultiplier();
+
             activeWithers.put(target.getUniqueId(), new BukkitRunnable() {
                 int ticksActive = 0;
 
@@ -403,26 +403,26 @@ public class PlagueCloudAbility implements Ability {
                         return;
                     }
 
-                    if (ticksActive % 40 == 0) { // Damage every 2 seconds
+                    if (ticksActive % witherTickInterval == 0) {
                         Spellbreak.getInstance().getAbilityDamage().damage(
-                                target,
-                                1.0, // Wither damage amount
-                                caster,
-                                PlagueCloudAbility.this,
-                                "PlagueWither"
-                        );
+                                target, witherDmg, caster, PlagueCloudAbility.this, "PlagueWither");
+
+                        // Level 5: soul fire flame ring on wither tick
+                        if (sl.getLevel() >= 5) {
+                            target.getWorld().spawnParticle(Particle.SOUL_FIRE_FLAME,
+                                    target.getLocation().add(0, 1, 0), 8, 0.5, 0.3, 0.5, 0.05);
+                        }
                     }
 
-                    // Wither particles
-                    target.getWorld().spawnParticle(
-                            Particle.SMOKE,
-                            target.getLocation().add(0, 1, 0),
-                            3,
-                            0.3,
-                            0.5,
-                            0.3,
-                            0.01
-                    );
+                    target.getWorld().spawnParticle(Particle.SMOKE,
+                            target.getLocation().add(0, 1, 0), 3 + sl.getLevel(),
+                            0.3, 0.5, 0.3, 0.01);
+
+                    // Level 3+: mycelium dust on targets
+                    if (sl.getLevel() >= 3 && ticksActive % 10 == 0) {
+                        target.getWorld().spawnParticle(Particle.MYCELIUM,
+                                target.getLocation().add(0, 1, 0), 4, 0.3, 0.3, 0.3, 0.1);
+                    }
 
                     ticksActive++;
                 }

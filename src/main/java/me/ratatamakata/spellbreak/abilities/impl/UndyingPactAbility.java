@@ -2,6 +2,7 @@ package me.ratatamakata.spellbreak.abilities.impl;
 
 import me.ratatamakata.spellbreak.Spellbreak;
 import me.ratatamakata.spellbreak.abilities.Ability;
+import me.ratatamakata.spellbreak.level.SpellLevel;
 import me.ratatamakata.spellbreak.managers.PlayerDataManager;
 import net.md_5.bungee.api.ChatMessageType;
 import net.md_5.bungee.api.chat.TextComponent;
@@ -75,11 +76,21 @@ public class UndyingPactAbility implements Ability {
             player.sendMessage("§cYou must be a Necromancer to use this ability."); return;
         }
 
+        SpellLevel sl = Spellbreak.getInstance().getLevelManager()
+                .getSpellLevel(casterId, playerClass.toLowerCase(), getName());
+
+        double scaledRadius = pactRadius * sl.getRangeMultiplier();
+        int scaledDuration = (int)(durationTicks * sl.getDurationMultiplier());
+        // Level 3+: protect more health (6 hearts)
+        double scaledMinHealth = (sl.getLevel() >= 3) ? 12.0 : minHealth;
+        // Level 5: protect 8 hearts
+        if (sl.getLevel() >= 5) scaledMinHealth = 16.0;
+
         // Initialize tracking maps for this caster
         entitiesInRadius.put(casterId, new ConcurrentHashMap<>());
         affectedEntities.put(casterId, ConcurrentHashMap.newKeySet());
         protectedEntities.put(casterId, ConcurrentHashMap.newKeySet());
-        enteredBelowMin.put(casterId, ConcurrentHashMap.newKeySet()); // NEW: Track entities entered below min
+        enteredBelowMin.put(casterId, ConcurrentHashMap.newKeySet());
 
         // Spawn marker
         Location center = player.getLocation();
@@ -93,18 +104,26 @@ public class UndyingPactAbility implements Ability {
         });
         markerEntities.put(casterId, marker.getUniqueId());
 
-        // Enhanced necromancer activation effects
-        player.getWorld().playSound(loc, Sound.ENTITY_WITHER_SPAWN, 1.2f, 0.6f);
+        float activationPitch = 0.6f + (sl.getLevel() * 0.08f);
+        player.getWorld().playSound(loc, Sound.ENTITY_WITHER_SPAWN, 1.2f, activationPitch);
         player.getWorld().playSound(loc, Sound.AMBIENT_SOUL_SAND_VALLEY_MOOD, 0.8f, 0.9f);
         player.getWorld().playSound(loc, Sound.BLOCK_SOUL_SOIL_BREAK, 1.0f, 0.7f);
 
+        // Level 5: extra bone crack burst
+        if (sl.getLevel() >= 5) {
+            player.getWorld().playSound(loc, Sound.ENTITY_WITHER_BREAK_BLOCK, 1.0f, 0.8f);
+            player.getWorld().spawnParticle(Particle.SQUID_INK, loc, 20, 1.5, 0.5, 1.5, 0.2);
+        }
+
         // Dark ritual circle activation
-        for (int i = 0; i < 3; i++) {
+        int ringCount = 3 + (sl.getLevel() >= 3 ? 1 : 0) + (sl.getLevel() >= 5 ? 1 : 0);
+        for (int i = 0; i < ringCount; i++) {
             final int ring = i;
             Bukkit.getScheduler().runTaskLater(Spellbreak.getInstance(), () -> {
                 double radius = 1.5 + (ring * 1.5);
-                for (int j = 0; j < 32; j++) {
-                    double angle = 2 * Math.PI * j / 32;
+                int ringPoints = 32 + (sl.getLevel() >= 3 ? 8 : 0);
+                for (int j = 0; j < ringPoints; j++) {
+                    double angle = 2 * Math.PI * j / ringPoints;
                     double x = radius * Math.cos(angle);
                     double z = radius * Math.sin(angle);
                     Location particleLoc = loc.clone().add(x, 0.1, z);
@@ -126,16 +145,20 @@ public class UndyingPactAbility implements Ability {
 
         player.sendMessage("§0§l⚔ §8§lUNDYING PACT §0§l⚔");
         player.sendMessage("§8⚰ §7Death itself bends to your will... §8⚰");
-        player.sendMessage("§5§lProtection: §d" + (minHealth/2) + " hearts §8| §5§lDuration: §d" + (durationTicks/20) + "s");
+        player.sendMessage("§5§lProtection: §d" + (scaledMinHealth/2) + " hearts §8| §5§lDuration: §d" + (scaledDuration/20) + "s §8| §5§lLevel: §d" + sl.getLevel());
         player.sendMessage("§5§lDamage Reduction: §d" + (int)((1-damageReductionMultiplier)*100) + "%");
+
+        final double fRadius = scaledRadius;
+        final int fDuration = scaledDuration;
+        final double fMinHealth = scaledMinHealth;
 
         // Health enforcement + action bar
         BukkitTask enforceTask = new BukkitRunnable() {
             int ticks = 0;
             @Override
             public void run() {
-                if (ticks >= durationTicks) { removePact(casterId, player.getWorld()); cancel(); return; }
-                int secs = (durationTicks - ticks)/20;
+                if (ticks >= fDuration) { removePact(casterId, player.getWorld()); cancel(); return; }
+                int secs = (fDuration - ticks)/20;
                 player.spigot().sendMessage(ChatMessageType.ACTION_BAR,
                         new TextComponent("§0⚰ §5§lUNDYING PACT §0⚰ §8[§5" + secs + "s§8]"));
 
@@ -147,27 +170,25 @@ public class UndyingPactAbility implements Ability {
                 Map<UUID, Double> currentInRadius = entitiesInRadius.get(casterId);
                 Set<UUID> affected = affectedEntities.get(casterId);
                 Set<UUID> protectedE = protectedEntities.get(casterId);
-                Set<UUID> enteredBelowSet = enteredBelowMin.get(casterId); // NEW: Access enteredBelow set
+                Set<UUID> enteredBelowSet = enteredBelowMin.get(casterId);
                 Set<UUID> newInRadius = new HashSet<>();
 
                 // Check all entities in radius
-                for (Entity e : player.getWorld().getNearbyEntities(cen, pactRadius, pactRadius, pactRadius)) {
+                for (Entity e : player.getWorld().getNearbyEntities(cen, fRadius, fRadius, fRadius)) {
                     if (!(e instanceof LivingEntity)) continue;
                     LivingEntity le = (LivingEntity) e;
                     UUID entityId = le.getUniqueId();
                     newInRadius.add(entityId);
 
-                    // If entity just entered radius, record their original health and protect them
                     if (!currentInRadius.containsKey(entityId)) {
                         double originalHealth = le.getHealth();
                         currentInRadius.put(entityId, originalHealth);
-                        protectedE.add(entityId); // Add to protection immediately
+                        protectedE.add(entityId);
 
-                        // ONLY set health to minHealth if they're below it on entry
-                        if (originalHealth < minHealth) {
-                            le.setHealth(minHealth);
+                        if (originalHealth < fMinHealth) {
+                            le.setHealth(fMinHealth);
                             affected.add(entityId);
-                            enteredBelowSet.add(entityId); // NEW: Mark as entered below min
+                            enteredBelowSet.add(entityId);
                             // Enhanced necromantic entry effect
                             le.getWorld().spawnParticle(Particle.SOUL_FIRE_FLAME, le.getLocation().add(0,1.5,0), 8, 0.3,0.3,0.3, 0.05);
                             le.getWorld().spawnParticle(Particle.SOUL, le.getLocation().add(0,1,0), 12, 0.4,0.4,0.4, 0.02);
@@ -192,24 +213,18 @@ public class UndyingPactAbility implements Ability {
 
                     // Continuously enforce minimum health for entities in radius
                     double currentHealth = le.getHealth();
-                    if (currentHealth < minHealth && currentHealth > 0) { // Only if not already dead
-                        le.setHealth(minHealth);
+                    if (currentHealth < fMinHealth && currentHealth > 0) {
+                        le.setHealth(fMinHealth);
                         affected.add(entityId);
-                        // Intense death-defying protection effect
                         le.getWorld().spawnParticle(Particle.SOUL_FIRE_FLAME, le.getLocation().add(0,2,0), 12, 0.4,0.4,0.4, 0.08);
                         le.getWorld().spawnParticle(Particle.SOUL, le.getLocation().add(0,1.5,0), 20, 0.5,0.5,0.5, 0.03);
                         le.getWorld().spawnParticle(Particle.SMOKE, le.getLocation().add(0,0.8,0), 25, 0.6,0.3,0.6, 0.04);
                         le.getWorld().spawnParticle(Particle.ENCHANT, le.getLocation().add(0,1.2,0), 15, 0.7,0.7,0.7, 1.2);
                         le.getWorld().spawnParticle(Particle.WITCH, le.getLocation().add(0,1,0), 8, 0.3,0.3,0.3, 0.02);
-
-                        // Dramatic death-defying sounds
                         le.getWorld().playSound(le.getLocation(), Sound.ENTITY_WITHER_HURT, 1.0f, 0.9f);
                         le.getWorld().playSound(le.getLocation(), Sound.PARTICLE_SOUL_ESCAPE, 0.8f, 1.3f);
                         le.getWorld().playSound(le.getLocation(), Sound.BLOCK_SOUL_SOIL_STEP, 1.2f, 0.7f);
-
-                        if (le instanceof Player) {
-                            ((Player) le).sendMessage("§0§l⚱ §5§lDEATH DENIED §0§l⚱");
-                        }
+                        if (le instanceof Player) ((Player) le).sendMessage("§0§l⚱ §5§lDEATH DENIED §0§l⚱");
                     }
                 }
 
@@ -266,21 +281,19 @@ public class UndyingPactAbility implements Ability {
                 if (!(m instanceof ArmorStand)) { cancel(); return; }
                 Location cen = m.getLocation();
 
-                rotation += Math.PI / 16; // Slow rotation
+                rotation += Math.PI / 16;
 
-                // Main circle - alternating soul fire and dark particles
                 Particle.DustOptions darkRed = new Particle.DustOptions(Color.fromRGB(120,20,20), 2.2f);
                 Particle.DustOptions deepPurple = new Particle.DustOptions(Color.fromRGB(80,0,80), 1.8f);
                 Particle.DustOptions black = new Particle.DustOptions(Color.fromRGB(25,25,25), 2.0f);
 
-                int points = 80;
+                int points = 80 + (sl.getLevel() >= 3 ? 20 : 0);
                 for (int i = 0; i < points; i++) {
                     double ang = (2 * Math.PI * i / points) + rotation;
-                    double x = pactRadius * Math.cos(ang);
-                    double z = pactRadius * Math.sin(ang);
+                    double x = fRadius * Math.cos(ang);
+                    double z = fRadius * Math.sin(ang);
                     Location p = cen.clone().add(x, 0.3, z);
 
-                    // Create layered circle effect
                     if (i % 3 == 0) {
                         p.getWorld().spawnParticle(Particle.SOUL_FIRE_FLAME, p, 1, 0,0,0,0);
                         p.getWorld().spawnParticle(Particle.DUST, p, 2, 0.1,0,0.1,0, darkRed);
@@ -294,8 +307,9 @@ public class UndyingPactAbility implements Ability {
                 }
 
                 // Inner ritual circles
-                for (int ring = 1; ring <= 2; ring++) {
-                    double innerRadius = pactRadius * (0.3 * ring);
+                int ringLevels = 2 + (sl.getLevel() >= 5 ? 1 : 0);
+                for (int ring = 1; ring <= ringLevels; ring++) {
+                    double innerRadius = fRadius * (0.3 * ring);
                     int innerPoints = 40 / ring;
                     for (int i = 0; i < innerPoints; i++) {
                         double ang = (2 * Math.PI * i / innerPoints) - (rotation * ring);
@@ -303,19 +317,15 @@ public class UndyingPactAbility implements Ability {
                         double z = innerRadius * Math.sin(ang);
                         Location p = cen.clone().add(x, 0.2, z);
                         p.getWorld().spawnParticle(Particle.ENCHANT, p, 1, 0,0,0,0.3);
-                        if (ring == 1) {
-                            p.getWorld().spawnParticle(Particle.WITCH, p, 1, 0.05,0,0.05,0.01);
-                        }
+                        if (ring == 1) p.getWorld().spawnParticle(Particle.WITCH, p, 1, 0.05,0,0.05,0.01);
                     }
                 }
 
                 // Central necromantic energy pillar
-                for (int y = 0; y < 8; y++) {
+                for (int y = 0; y < 8 + sl.getLevel(); y++) {
                     Location pillar = cen.clone().add(0, y * 0.3, 0);
                     pillar.getWorld().spawnParticle(Particle.SOUL, pillar, 1, 0.1,0.1,0.1,0.02);
-                    if (y % 2 == 0) {
-                        pillar.getWorld().spawnParticle(Particle.SMOKE, pillar, 2, 0.15,0.1,0.15,0.01);
-                    }
+                    if (y % 2 == 0) pillar.getWorld().spawnParticle(Particle.SMOKE, pillar, 2, 0.15,0.1,0.15,0.01);
                 }
             }
         }.runTaskTimer(Spellbreak.getInstance(), 0L, 4L);

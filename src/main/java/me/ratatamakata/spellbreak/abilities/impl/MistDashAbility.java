@@ -2,6 +2,7 @@ package me.ratatamakata.spellbreak.abilities.impl;
 
 import me.ratatamakata.spellbreak.Spellbreak;
 import me.ratatamakata.spellbreak.abilities.Ability;
+import me.ratatamakata.spellbreak.level.SpellLevel;
 import org.bukkit.*;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.entity.LivingEntity;
@@ -28,7 +29,7 @@ public class MistDashAbility implements Ability, Listener {
     private double effectRadius = 2.5;
     private int poisonDuration = 30;
     private int poisonAmplifier = 0;
-    private double poisonDamage = .5; // Damage per tick
+    private double poisonDamage = .5;
 
     private final Map<UUID, MistState> activePlayers = new HashMap<>();
     private final Map<UUID, BukkitRunnable> activeTasks = new HashMap<>();
@@ -53,11 +54,21 @@ public class MistDashAbility implements Ability, Listener {
     @Override
     public void activate(Player player) {
         UUID uuid = player.getUniqueId();
-
-        // Cancel existing if any
         cleanup(player);
 
-        // Store original state
+        SpellLevel sl = Spellbreak.getInstance().getLevelManager()
+                .getSpellLevel(uuid,
+                        Spellbreak.getInstance().getPlayerDataManager().getPlayerClass(uuid),
+                        getName());
+
+        double scaledRadius = effectRadius * sl.getRangeMultiplier();
+        double scaledDamage = poisonDamage * sl.getDamageMultiplier();
+        int scaledDuration = (int)(durationTicks * sl.getDurationMultiplier());
+        // Level 3+: poison amplifier increases
+        int scaledPoisonAmp = (sl.getLevel() >= 3) ? 1 : poisonAmplifier;
+        // Level 5: amplifier 2
+        if (sl.getLevel() >= 5) scaledPoisonAmp = 2;
+
         MistState state = new MistState(
                 player.getInventory().getArmorContents(),
                 player.getInventory().getItemInMainHand(),
@@ -67,68 +78,67 @@ public class MistDashAbility implements Ability, Listener {
         );
         activePlayers.put(uuid, state);
 
-        // Clear visible items
         player.getInventory().setArmorContents(new ItemStack[4]);
         player.getInventory().setItemInMainHand(new ItemStack(Material.AIR));
         player.getInventory().setItemInOffHand(new ItemStack(Material.AIR));
-
-        // Apply effects
         player.setAllowFlight(true);
         player.setFlying(true);
         player.setInvisible(true);
         player.setInvulnerable(true);
         final double startY = player.getLocation().getY();
 
-        // Start cooldown immediately
         Spellbreak.getInstance().getCooldownManager().setCooldown(player, getName(), getCooldown());
 
         Particle.DustOptions green = new Particle.DustOptions(Color.fromRGB(67, 99, 27), 1.0f);
         Particle.DustOptions teal  = new Particle.DustOptions(Color.fromRGB(24, 115, 50), 1.0f);
+        // Level 3+: extra sickly yellow-green
+        Particle.DustOptions toxic = new Particle.DustOptions(Color.fromRGB(140, 200, 20), 1.4f);
 
+        final int finalPoisonAmp = scaledPoisonAmp;
         BukkitRunnable task = new BukkitRunnable() {
             int ticks = 0;
 
             @Override
             public void run() {
-                if (!player.isValid() || !player.isOnline() || ticks++ >= durationTicks) {
+                if (!player.isValid() || !player.isOnline() || ticks++ >= scaledDuration) {
                     cleanup(player);
                     return;
                 }
 
-                // Movement
                 Location loc = player.getLocation();
                 Vector dir = loc.getDirection().normalize().multiply(speed);
-                if (loc.getY() + dir.getY() > startY + yLimit) {
-                    dir.setY(0);
-                }
+                if (loc.getY() + dir.getY() > startY + yLimit) dir.setY(0);
                 player.setVelocity(dir);
 
-                // Particles
                 Location center = loc.clone().add(0, 1, 0);
-                spawnParticles(player, center, green, teal);
 
-                // Poison & damage
-                applyPoisonAndDamage(player, center);
-            }
+                // Base particles
+                player.getWorld().spawnParticle(Particle.DUST, center, 30,
+                        scaledRadius, scaledRadius, scaledRadius, green);
+                player.getWorld().spawnParticle(Particle.DUST, center, 15,
+                        scaledRadius, scaledRadius, scaledRadius, teal);
 
-            private void spawnParticles(Player p, Location center, Particle.DustOptions... opts) {
-                for (Particle.DustOptions opt : opts) {
-                    p.getWorld().spawnParticle(Particle.DUST, center, 30,
-                            effectRadius, effectRadius, effectRadius, opt);
+                // Level 3+: toxic particle layer
+                if (sl.getLevel() >= 3) {
+                    player.getWorld().spawnParticle(Particle.DUST, center, 12,
+                            scaledRadius * 0.7, scaledRadius * 0.7, scaledRadius * 0.7, toxic);
+                    player.getWorld().spawnParticle(Particle.SPORE_BLOSSOM_AIR, center, 4,
+                            scaledRadius * 0.5, scaledRadius * 0.5, scaledRadius * 0.5, 0);
                 }
-            }
 
-            private void applyPoisonAndDamage(Player caster, Location center) {
-                for (LivingEntity entity : center.getWorld().getNearbyLivingEntities(center, effectRadius)) {
-                    if (entity.equals(caster)) continue;
+                // Level 5: portal burst every 15 ticks
+                if (sl.getLevel() >= 5 && ticks % 15 == 0) {
+                    player.getWorld().spawnParticle(Particle.SOUL_FIRE_FLAME, center, 10,
+                            scaledRadius * 0.4, scaledRadius * 0.4, scaledRadius * 0.4, 0.05);
+                    player.getWorld().playSound(center, Sound.AMBIENT_SOUL_SAND_VALLEY_MOOD, 0.4f, 1.6f);
+                }
 
-                    // 1) Apply poison effect
-                    entity.addPotionEffect(new PotionEffect(PotionEffectType.POISON, poisonDuration, poisonAmplifier));
-
-                    // 2) Deal damage via ability-damage API
-                    Spellbreak.getInstance()
-                            .getAbilityDamage()
-                            .damage(entity, poisonDamage, caster, MistDashAbility.this, null);
+                // Damage + poison
+                for (LivingEntity entity : center.getWorld().getNearbyLivingEntities(center, scaledRadius)) {
+                    if (entity.equals(player)) continue;
+                    entity.addPotionEffect(new PotionEffect(PotionEffectType.POISON, poisonDuration, finalPoisonAmp));
+                    Spellbreak.getInstance().getAbilityDamage()
+                            .damage(entity, scaledDamage, player, MistDashAbility.this, null);
                 }
             }
         };
@@ -152,7 +162,6 @@ public class MistDashAbility implements Ability, Listener {
         player.setAllowFlight(state.flightAllowed());
         player.setFlying(state.wasFlying());
         if (!state.flightAllowed()) player.setFlying(false);
-
         player.setInvisible(false);
         player.setInvulnerable(false);
         player.setVelocity(new Vector(0, 0, 0));
@@ -161,9 +170,7 @@ public class MistDashAbility implements Ability, Listener {
     }
 
     @EventHandler
-    public void onPlayerQuit(PlayerQuitEvent event) {
-        cleanup(event.getPlayer());
-    }
+    public void onPlayerQuit(PlayerQuitEvent event) { cleanup(event.getPlayer()); }
 
     @Override
     public void loadConfig() {

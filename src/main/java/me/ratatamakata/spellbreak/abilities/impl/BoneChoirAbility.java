@@ -5,6 +5,7 @@ import io.lumine.mythic.bukkit.MythicBukkit;
 import io.lumine.mythic.core.mobs.ActiveMob;
 import me.ratatamakata.spellbreak.Spellbreak;
 import me.ratatamakata.spellbreak.abilities.Ability;
+import me.ratatamakata.spellbreak.level.SpellLevel;
 import me.ratatamakata.spellbreak.listeners.CustomDeathMessageListener;
 import org.bukkit.*;
 import org.bukkit.Particle.DustOptions;
@@ -125,18 +126,34 @@ public class BoneChoirAbility implements Ability {
         skillCooldowns.put(uid, new HashMap<>());
         mobMovementStates.put(uid, new HashMap<>());
 
+        SpellLevel sl = Spellbreak.getInstance().getLevelManager()
+                .getSpellLevel(uid,
+                        Spellbreak.getInstance().getPlayerDataManager().getPlayerClass(uid),
+                        getName());
+
+        double scaledRadius = formationRadius * sl.getRangeMultiplier();
+        int scaledDuration = (int)(duration * sl.getDurationMultiplier());
+
         Location center = player.getLocation();
         List<ActiveMob> choir = new ArrayList<>();
         String[] types = {"BoneChoirTenor", "BoneChoirBaritone", "BoneChoirBass"};
 
-        // Spawn effect
-        player.getWorld().playSound(center, Sound.BLOCK_BONE_BLOCK_BREAK, 1f, 0.7f);
-        player.getWorld().spawnParticle(Particle.SOUL, center, 50, 1, 0.5, 1, 0.2);
+        // Spawn effect - more particles at higher levels
+        float spawnPitch = 0.7f + (sl.getLevel() * 0.08f);
+        player.getWorld().playSound(center, Sound.BLOCK_BONE_BLOCK_BREAK, 1f, spawnPitch);
+        int soulCount = 50 + (sl.getLevel() >= 3 ? 30 : 0);
+        player.getWorld().spawnParticle(Particle.SOUL, center, soulCount, 1, 0.5, 1, 0.2);
+
+        // Level 5: extra bone crack underworld burst
+        if (sl.getLevel() >= 5) {
+            player.getWorld().playSound(center, Sound.ENTITY_WITHER_SPAWN, 0.8f, 1.2f);
+            player.getWorld().spawnParticle(Particle.SOUL_FIRE_FLAME, center, 25, 1.5, 0.5, 1.5, 0.15);
+        }
 
         // Rising animation for each ActiveMob
         for (int i = 0; i < types.length; i++) {
             final int idx = i;
-            Vector offset = getFormationOffset(idx);
+            Vector offset = getFormationOffset(idx, scaledRadius);
             Location spawnLoc = center.clone().add(offset);
             Location groundLoc = spawnLoc.clone().subtract(0, 2, 0);
 
@@ -223,10 +240,8 @@ public class BoneChoirAbility implements Ability {
                         uid,
                         new BukkitRunnable() {
                             @Override
-                            public void run() {
-                                removeChoir(uid);
-                            }
-                        }.runTaskLater(Spellbreak.getInstance(), duration * 20L)
+                            public void run() { removeChoir(uid); }
+                        }.runTaskLater(Spellbreak.getInstance(), scaledDuration * 20L)
                 );
 
                 syncTasks.put(
@@ -241,17 +256,9 @@ public class BoneChoirAbility implements Ability {
                                 }
                                 LivingEntity mainPlayerTarget = getPlayerTarget(player);
                                 List<ActiveMob> list = activeChoirs.get(uid);
-                                if (list == null) {
-                                    removeChoir(uid);
-                                    cancel();
-                                    return;
-                                }
+                                if (list == null) { removeChoir(uid); cancel(); return; }
                                 Map<Entity, MovementState> states = mobMovementStates.get(uid);
-                                if (states == null) {
-                                    removeChoir(uid);
-                                    cancel();
-                                    return;
-                                }
+                                if (states == null) { removeChoir(uid); cancel(); return; }
 
                                 for (int j = 0; j < list.size(); j++) {
                                     ActiveMob m = list.get(j);
@@ -263,9 +270,10 @@ public class BoneChoirAbility implements Ability {
                                     MovementState st = states.get(e);
                                     if (st == null || type == null) continue;
 
-                                    // Debris particle checks
-                                    if (System.currentTimeMillis() % 2000 < ThreadLocalRandom.current().nextInt(80, 120)) {
-                                        e.getWorld().spawnParticle(Particle.NOTE, e.getLocation().add(0, 2, 0), 1, 0.1, 0.1, 0.1, 0);
+                                    // Level 3+: more frequent note particles
+                                    long noteInterval = (sl.getLevel() >= 3) ? 1200L : 2000L;
+                                    if (System.currentTimeMillis() % noteInterval < ThreadLocalRandom.current().nextInt(80, 120)) {
+                                        e.getWorld().spawnParticle(Particle.NOTE, e.getLocation().add(0, 2, 0), 1 + (sl.getLevel() >= 3 ? 1 : 0), 0.1, 0.1, 0.1, 0);
                                     }
 
                                     double dToPlayer = e.getLocation().distance(player.getLocation());
@@ -699,15 +707,19 @@ public class BoneChoirAbility implements Ability {
         return null;
     }
 
-    private Vector getFormationOffset(int i) {
+    private Vector getFormationOffset(int i, double radius) {
         double a = Math.toRadians(120 * i);
-        // Add slight random jitter to make formation less rigid
         double jitter = (ThreadLocalRandom.current().nextDouble() - 0.5) * 0.1;
         return new Vector(
-                Math.cos(a) * (formationRadius + jitter),
+                Math.cos(a) * (radius + jitter),
                 0,
-                Math.sin(a) * (formationRadius + jitter)
+                Math.sin(a) * (radius + jitter)
         );
+    }
+
+    // Keep original overload for backward compatibility
+    private Vector getFormationOffset(int i) {
+        return getFormationOffset(i, formationRadius);
     }
 
     private void handleCombatPositioning(
