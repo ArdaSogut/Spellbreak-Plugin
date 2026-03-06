@@ -38,12 +38,7 @@ public class MeteorLashAbility implements Ability {
     private final Map<UUID, Long> selectionTimes = new HashMap<>();
     private final Map<UUID, BukkitRunnable> selectionIndicators = new HashMap<>();
 
-    // adjusted parameters per-cast
-    private double adjustedDamage;
-    private double adjustedKnockback;
-    private int adjustedMeteorDuration;
-    private double adjustedMeteorSpeed;
-    private double adjustedImpactRadius;
+    // Adjusted parameters are now calculated per-cast to prevent race conditions
 
     @Override public String getName() { return "MeteorLash"; }
     @Override public String getDescription() { return "Select a location with left click, then launch a meteor that strikes in a plus pattern."; }
@@ -65,15 +60,16 @@ public class MeteorLashAbility implements Ability {
             startSelectionMode(player);
             return;
         }
-        SpellLevel lvl = Spellbreak.getInstance().getLevelManager()
+        SpellLevel sl = Spellbreak.getInstance().getLevelManager()
                 .getSpellLevel(uuid, Spellbreak.getInstance().getPlayerDataManager().getPlayerClass(uuid), getName());
-        adjustedDamage = damage;
-        adjustedKnockback = knockbackStrength;
-        adjustedMeteorDuration = meteorDuration;
-        adjustedMeteorSpeed = meteorSpeed;
-        adjustedImpactRadius = impactRadius;
+        double finalDamage = damage * sl.getDamageMultiplier();
+        double finalKnockback = knockbackStrength * Math.sqrt(sl.getDamageMultiplier());
+        int finalMeteorDuration = (int) (meteorDuration * sl.getDurationMultiplier());
+        double finalMeteorSpeed = meteorSpeed;
+        double finalImpactRadius = impactRadius * sl.getRangeMultiplier();
+        
         cleanupSelection(uuid);
-        launchMeteor(player, current);
+        launchMeteor(player, current, sl, finalDamage, finalKnockback, finalMeteorDuration, finalMeteorSpeed, finalImpactRadius);
     }
 
     private void startSelectionMode(Player player) {
@@ -127,7 +123,7 @@ public class MeteorLashAbility implements Ability {
         selectionTimes.put(uuid, System.currentTimeMillis());
     }
 
-    private void launchMeteor(Player player, Location target) {
+    private void launchMeteor(Player player, Location target, SpellLevel sl, double finalDamage, double finalKnockback, int finalMeteorDuration, double finalMeteorSpeed, double finalImpactRadius) {
         World w = player.getWorld();
         Location start = player.getLocation().add(-8, 20, 0);
         Vector dir = target.toVector().subtract(start.toVector()).normalize();
@@ -149,27 +145,31 @@ public class MeteorLashAbility implements Ability {
                 pts.clear();
 
                 // Check termination conditions
-                if (t++ >= adjustedMeteorDuration || ctr.getY() <= target.getY()) {
-                    List<Location> ip = createImpact(player, ctr);
+                if (t++ >= finalMeteorDuration || ctr.getY() <= target.getY()) {
+                    List<Location> ip = createImpact(player, ctr, sl, finalDamage, finalKnockback, finalImpactRadius);
                     createExplosionEffect(w, ctr, ip);
                     cancel();
                     return;
                 }
 
                 // Move meteor and create new blocks
-                ctr.add(dir.clone().multiply(adjustedMeteorSpeed));
+                ctr.add(dir.clone().multiply(finalMeteorSpeed));
                 createMeteorCube(ctr, pts);
 
                 // Particles and entity interactions
                 w.spawnParticle(Particle.FLAME, ctr, 8, 0.3, 0.3, 0.3, 0.01);
                 w.spawnParticle(Particle.SMOKE, ctr, 3, 0.2, 0.2, 0.2, 0.01);
+                
+                if (sl.getLevel() >= 3) {
+                    w.spawnParticle(Particle.FALLING_DUST, ctr, 5, 0.5, 0.5, 0.5, 0.01, Material.GLOWSTONE.createBlockData());
+                }
                 for(Entity e : w.getNearbyEntities(ctr, 2, 2, 2)) {
                     if(e instanceof LivingEntity && !e.equals(player)) {
                         Vector kb = e.getLocation().toVector().subtract(ctr.toVector())
-                                .normalize().multiply(adjustedKnockback * 0.5).setY(0.3);
+                                .normalize().multiply(finalKnockback * 0.5).setY(0.3);
                         e.setVelocity(kb);
                         Spellbreak.getInstance().getAbilityDamage()
-                                .damage((LivingEntity)e, adjustedDamage, player, MeteorLashAbility.this, "MeteorLash");
+                                .damage((LivingEntity)e, finalDamage, player, MeteorLashAbility.this, "MeteorLash");
                     }
                 }
             }
@@ -185,7 +185,7 @@ public class MeteorLashAbility implements Ability {
         for(int i=0;i<pts.size();i++){Location p=pts.get(i); Block b=p.getBlock(); if(b.getType().isAir()){b.setType(i%2==0?Material.NETHERRACK:Material.MAGMA_BLOCK); trail.add(p);} }
     }
 
-    private List<Location> createImpact(Player player, Location loc) {
+    private List<Location> createImpact(Player player, Location loc, SpellLevel sl, double finalDamage, double finalKnockback, double finalImpactRadius) {
         World w = player.getWorld();
         List<Location> pts = new ArrayList<>();
         pts.add(loc.clone());
@@ -193,6 +193,17 @@ public class MeteorLashAbility implements Ability {
         pts.add(loc.clone().add(-1,0,0));
         pts.add(loc.clone().add(0,0,1));
         pts.add(loc.clone().add(0,0,-1));
+        
+        if (sl.getLevel() >= 5) { // L5: Larger crater AoE
+            pts.add(loc.clone().add(1,0,1));
+            pts.add(loc.clone().add(-1,0,1));
+            pts.add(loc.clone().add(1,0,-1));
+            pts.add(loc.clone().add(-1,0,-1));
+            pts.add(loc.clone().add(2,0,0));
+            pts.add(loc.clone().add(-2,0,0));
+            pts.add(loc.clone().add(0,0,2));
+            pts.add(loc.clone().add(0,0,-2));
+        }
 
         for(Location p : pts) {
             Block block = p.getBlock();
@@ -210,15 +221,15 @@ public class MeteorLashAbility implements Ability {
             }
 
             // Damage and knockback calculations remain unchanged
-            for(Entity e : w.getNearbyEntities(p, adjustedImpactRadius, 2, adjustedImpactRadius)) {
+            for(Entity e : w.getNearbyEntities(p, finalImpactRadius, 2, finalImpactRadius)) {
                 if(e instanceof LivingEntity && !e.equals(player)) {
                     double d = e.getLocation().distance(p);
-                    if(d <= adjustedImpactRadius) {
+                    if(d <= finalImpactRadius) {
                         Vector kb = e.getLocation().toVector().subtract(p.toVector())
-                                .normalize().multiply(adjustedKnockback).setY(0.5);
+                                .normalize().multiply(finalKnockback).setY(0.5);
                         e.setVelocity(kb);
                         Spellbreak.getInstance().getAbilityDamage()
-                                .damage((LivingEntity)e, adjustedDamage * (1 - (d/adjustedImpactRadius)),
+                                .damage((LivingEntity)e, finalDamage * (1 - (d/finalImpactRadius)),
                                         player, this, "MeteorLash");
                     }
                 }

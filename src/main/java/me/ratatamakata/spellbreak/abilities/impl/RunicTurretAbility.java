@@ -18,6 +18,7 @@ import org.bukkit.scheduler.BukkitRunnable;
 import org.bukkit.scheduler.BukkitTask;
 import org.bukkit.util.EulerAngle;
 import org.bukkit.util.Vector;
+import me.ratatamakata.spellbreak.level.SpellLevel;
 
 import java.util.*;
 
@@ -85,7 +86,12 @@ public class RunicTurretAbility implements Ability, Listener {
                 40, 0.5, 1, 0.5, 0.1);
 
         // Create and register the turret
-        RunicTurret turret = new RunicTurret(player, spawnLocation);
+        SpellLevel sl = Spellbreak.getInstance().getLevelManager().getSpellLevel(
+                player.getUniqueId(),
+                Spellbreak.getInstance().getPlayerDataManager().getPlayerClass(player.getUniqueId()),
+                getName()
+        );
+        RunicTurret turret = new RunicTurret(player, spawnLocation, sl);
 
         // Store the turret in the player's active turrets list
         activeTurrets.computeIfAbsent(player.getUniqueId(), k -> new HashSet<>()).add(turret);
@@ -94,7 +100,7 @@ public class RunicTurretAbility implements Ability, Listener {
                 net.md_5.bungee.api.ChatMessageType.ACTION_BAR,
                 new net.md_5.bungee.api.chat.TextComponent(
                         ChatColor.GOLD + "Runic Cannon deployed! Duration: " +
-                                ChatColor.RED + turretDuration + ChatColor.GOLD + "s"
+                                ChatColor.RED + turret.adjustedDuration + ChatColor.GOLD + "s"
                 )
         );
     }
@@ -183,11 +189,28 @@ public class RunicTurretAbility implements Ability, Listener {
         private long spawnTime;
         private boolean isActive = true;
         private boolean isLanded = false;
+        private final SpellLevel sl;
+        
+        // Scaled fields
+        public final int adjustedDuration;
+        private final double adjustedAttackRadius;
+        private final double adjustedAttackCooldown;
+        private final double adjustedDamageBase;
+        private final double adjustedDamageFire;
+        private final double adjustedDamageIce;
 
-        public RunicTurret(Player owner, Location location) {
+        public RunicTurret(Player owner, Location location, SpellLevel sl) {
             this.owner = owner;
             this.location = location.clone();
             this.spawnTime = System.currentTimeMillis();
+            this.sl = sl;
+            
+            this.adjustedDuration = (int)(turretDuration * sl.getDurationMultiplier());
+            this.adjustedAttackRadius = attackRadius * sl.getRangeMultiplier();
+            this.adjustedAttackCooldown = attackCooldown / sl.getDamageMultiplier();
+            this.adjustedDamageBase = damageBase * sl.getDamageMultiplier();
+            this.adjustedDamageFire = damageFire * sl.getDamageMultiplier();
+            this.adjustedDamageIce = damageIce * sl.getDamageMultiplier();
 
             // Create armor stand
             this.armorStand = location.getWorld().spawn(location, ArmorStand.class);
@@ -199,7 +222,7 @@ public class RunicTurretAbility implements Ability, Listener {
                 public void run() {
                     destroy();
                 }
-            }.runTaskLater(Spellbreak.getInstance(), turretDuration * 20L);
+            }.runTaskLater(Spellbreak.getInstance(), adjustedDuration * 20L);
 
             // Check landing and start attack after landing
             new BukkitRunnable() {
@@ -295,7 +318,7 @@ public class RunicTurretAbility implements Ability, Listener {
                     // Next attack pattern
                     attackPattern = (attackPattern + 1) % 3;
                 }
-            }.runTaskTimer(Spellbreak.getInstance(), 20L, (long)(attackCooldown * 20));
+            }.runTaskTimer(Spellbreak.getInstance(), 20L, (long)(adjustedAttackCooldown * 20));
         }
 
         private void findAndAttackTarget() {
@@ -317,14 +340,20 @@ public class RunicTurretAbility implements Ability, Listener {
             armorStand.setHeadPose(new EulerAngle(pitch, 0, 0));
 
             // Fire projectile at target
-            fireProjectileAtTarget(target);
+            if (sl.getLevel() >= 5) { // L5: Twin barrels
+                Vector right = direction.clone().crossProduct(new Vector(0, 1, 0)).normalize().multiply(0.2);
+                fireProjectileAtTarget(target, right);
+                fireProjectileAtTarget(target, right.multiply(-1));
+            } else {
+                fireProjectileAtTarget(target, null);
+            }
         }
 
         private LivingEntity findNearestTarget() {
             LivingEntity nearest = null;
             double nearestDistance = Double.MAX_VALUE;
 
-            for (Entity entity : armorStand.getNearbyEntities(attackRadius, attackRadius, attackRadius)) {
+            for (Entity entity : armorStand.getNearbyEntities(adjustedAttackRadius, adjustedAttackRadius, adjustedAttackRadius)) {
                 if (!(entity instanceof LivingEntity) ||
                         entity.equals(owner) ||
                         entity.equals(armorStand) ||
@@ -342,7 +371,7 @@ public class RunicTurretAbility implements Ability, Listener {
             return nearest;
         }
 
-        private void fireProjectileAtTarget(LivingEntity target) {
+        private void fireProjectileAtTarget(LivingEntity target, Vector directionOffset) {
             // Fire from cannon barrel position
             Location turretHead = armorStand.getLocation().clone().add(0, 1.6, 0);
             // Adjust position to be in front of the armor stand
@@ -350,6 +379,10 @@ public class RunicTurretAbility implements Ability, Listener {
             turretHead.add(frontDir);
             Location targetLoc = target.getLocation().clone().add(0, 1, 0);
             Vector direction = targetLoc.toVector().subtract(turretHead.toVector()).normalize();
+            
+            if (directionOffset != null) {
+                direction.add(directionOffset).normalize();
+            }
 
             // Store initial target location for hit detection
             final Location initialTargetLoc = target.getLocation().clone();
@@ -400,6 +433,10 @@ public class RunicTurretAbility implements Ability, Listener {
                     armorStand.getWorld().spawnParticle(Particle.DUST,
                             projectileLoc, 5, 0.1, 0.1, 0.1, 0.01,
                             new Particle.DustOptions(projectileColor, 1.5f));
+                            
+                    if (sl.getLevel() >= 3) {
+                        armorStand.getWorld().spawnParticle(Particle.EFFECT, projectileLoc, 1);
+                    }
 
                     // Additional effects based on attack type
                     switch (attackPattern) {
@@ -431,7 +468,7 @@ public class RunicTurretAbility implements Ability, Listener {
                     if (hitSomething ||
                             ticks >= maxTicks ||
                             !projectileLoc.getWorld().equals(turretHead.getWorld()) ||
-                            projectileLoc.distance(turretHead) > attackRadius * 1.5) {
+                            projectileLoc.distance(turretHead) > adjustedAttackRadius * 1.5) {
 
                         // Create impact effect even if we didn't hit
                         if (!hitSomething) {
@@ -448,7 +485,7 @@ public class RunicTurretAbility implements Ability, Listener {
 
                     switch (attackPattern) {
                         case 0: // Base (Fast)
-                            damage = damageBase;
+                            damage = adjustedDamageBase;
                             armorStand.getWorld().playSound(target.getLocation(),
                                     Sound.ENTITY_PLAYER_ATTACK_SWEEP, 1.0f, 1.2f);
                             armorStand.getWorld().spawnParticle(Particle.CRIT,
@@ -456,7 +493,7 @@ public class RunicTurretAbility implements Ability, Listener {
                             break;
 
                         case 1: // Fire (Slow)
-                            damage = damageFire;
+                            damage = adjustedDamageFire;
                             armorStand.getWorld().playSound(target.getLocation(),
                                     Sound.ENTITY_GENERIC_BURN, 1.0f, 1.0f);
                             armorStand.getWorld().spawnParticle(Particle.FLAME,
@@ -467,7 +504,7 @@ public class RunicTurretAbility implements Ability, Listener {
                             break;
 
                         case 2: // Ice (Medium)
-                            damage = damageIce;
+                            damage = adjustedDamageIce;
                             armorStand.getWorld().playSound(target.getLocation(),
                                     Sound.BLOCK_GLASS_BREAK, 1.0f, 0.8f);
                             armorStand.getWorld().spawnParticle(Particle.SNOWFLAKE,
@@ -482,7 +519,7 @@ public class RunicTurretAbility implements Ability, Listener {
                             break;
 
                         default:
-                            damage = damageBase;
+                            damage = adjustedDamageBase;
                     }
 
                     // Apply damage
@@ -538,7 +575,7 @@ public class RunicTurretAbility implements Ability, Listener {
         }
 
         public long getTimeRemaining() {
-            return Math.max(0, (spawnTime + (turretDuration * 1000) - System.currentTimeMillis()) / 1000);
+            return Math.max(0, (spawnTime + (adjustedDuration * 1000) - System.currentTimeMillis()) / 1000);
         }
     }
 }

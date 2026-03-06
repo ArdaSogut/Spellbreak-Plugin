@@ -93,10 +93,10 @@ public class ShadowCreaturesAbility implements Ability {
         globalOrbCooldown.put(player.getUniqueId(), 0);
 
         SpellLevel spellLevel = Spellbreak.getInstance().getLevelManager().getSpellLevel(player.getUniqueId(), getName(), "ShadowCreatures");
-        double adjustedOrbDistance = orbDistance ;
-        int adjustedDamage = damage;
-        int adjustedCooldown = cooldown;
-        int adjustedDuration = duration;
+        double adjustedOrbDistance = orbDistance * spellLevel.getRangeMultiplier();
+        int adjustedDamage = (int) Math.max(1, damage * spellLevel.getDamageMultiplier());
+        int adjustedCooldown = (int) (cooldown * spellLevel.getCooldownReduction());
+        int adjustedDuration = (int) (duration * spellLevel.getDurationMultiplier());
 
         for (int i = 0; i < 2; i++) {
             final int orbId = i;
@@ -205,6 +205,12 @@ public class ShadowCreaturesAbility implements Ability {
                             new Particle.DustOptions(Color.BLACK, 1.2f)
                     );
 
+                    // Level 5+: Explosion on shadow orb impact
+                    if (spellLevel.getLevel() >= 5) {
+                        world.spawnParticle(Particle.EXPLOSION, target.getLocation().add(0, 1, 0), 1);
+                        world.playSound(target.getLocation(), Sound.ENTITY_GENERIC_EXPLODE, 0.6f, 1.4f);
+                    }
+
                     drawMouthEffect(world, target);
 
                     Bukkit.getScheduler().runTaskLater(
@@ -305,6 +311,11 @@ public class ShadowCreaturesAbility implements Ability {
                                 0.1, 0.1, 0.1, 0.01,
                                 new Particle.DustOptions(Color.BLACK, 0.7f)
                         );
+                    }
+
+                    // Level 3+: SOUL_FIRE_FLAME particles on idle creatures
+                    if (spellLevel.getLevel() >= 3 && ticks % 4 == 0) {
+                        world.spawnParticle(Particle.SOUL_FIRE_FLAME, loc.clone().add(0, 0.5, 0), 1, 0.1, 0.1, 0.1, 0.01);
                     }
                 }
 

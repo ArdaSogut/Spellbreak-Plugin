@@ -33,14 +33,7 @@ public class BladeSpinAbility implements Ability {
     private double dashSpeed = 4;
     private int dashDurationTicks = 4;
 
-    public double adjustedDamagePerHit = damagePerHit;
-    public double adjustedDuration = duration;
-    public double adjustedRadius = radius;
-    public double adjustedForwardSpeed = forwardSpeed;
-    public double adjustedMaxHits = maxHitsPerEntity;
-    public double adjustedDashSpeed = dashSpeed;
-
-
+    // (Scaled fields are removed from here and passed to SpinData)
     private static final Map<UUID, SpinData> activeSpins = new HashMap<>();
 
     @Override
@@ -94,19 +87,18 @@ public class BladeSpinAbility implements Ability {
                         Spellbreak.getInstance().getPlayerDataManager().getPlayerClass(uuid),
                         getName());
 
-        adjustedDamagePerHit = damagePerHit * lvl.getDamageMultiplier();
-        adjustedDuration = duration * lvl.getDurationMultiplier();
-        adjustedRadius = radius + lvl.getLevel() * 0.05;
-        adjustedForwardSpeed = forwardSpeed + lvl.getLevel() * 0.02;
-        adjustedMaxHits = maxHitsPerEntity + lvl.getLevel() * 0.75;
-        adjustedDashSpeed = dashSpeed + lvl.getLevel() * 0.1;
-
+        double finalDamagePerHit = damagePerHit * lvl.getDamageMultiplier();
+        double finalDuration = duration * lvl.getDurationMultiplier();
+        double finalRadius = radius + lvl.getLevel() * 0.05;
+        double finalForwardSpeed = forwardSpeed + lvl.getLevel() * 0.02;
+        double finalMaxHits = maxHitsPerEntity + lvl.getLevel() * 0.75;
+        double finalDashSpeed = dashSpeed + lvl.getLevel() * 0.1;
 
         player.getInventory().setArmorContents(new ItemStack[4]);
         player.getInventory().setItemInMainHand(new ItemStack(Material.AIR));
         player.getInventory().setItemInOffHand(new ItemStack(Material.AIR));
 
-        SpinData data = new SpinData(player, invState);
+        SpinData data = new SpinData(player, invState, lvl, finalDamagePerHit, finalDuration, finalRadius, finalForwardSpeed, finalMaxHits, finalDashSpeed);
         activeSpins.put(uuid, data);
         data.start();
     }
@@ -124,9 +116,24 @@ public class BladeSpinAbility implements Ability {
         private int dashTicksRemaining = 0;
         private Vector dashDirection = null;
 
-        SpinData(Player player, PlayerInventoryState invState) {
+        private final SpellLevel sl;
+        private final double adjustedDamagePerHit;
+        private final double adjustedDuration;
+        private final double adjustedRadius;
+        private final double adjustedForwardSpeed;
+        private final double adjustedMaxHits;
+        private final double adjustedDashSpeed;
+
+        SpinData(Player player, PlayerInventoryState invState, SpellLevel sl, double dmg, double dur, double rad, double spd, double hits, double dash) {
             this.player = player;
             this.invState = invState;
+            this.sl = sl;
+            this.adjustedDamagePerHit = dmg;
+            this.adjustedDuration = dur;
+            this.adjustedRadius = rad;
+            this.adjustedForwardSpeed = spd;
+            this.adjustedMaxHits = hits;
+            this.adjustedDashSpeed = dash;
             this.totalTicks = (int) (adjustedDuration * 20);
         }
 
@@ -226,6 +233,19 @@ public class BladeSpinAbility implements Ability {
                         Sound.ENTITY_PLAYER_ATTACK_SWEEP, 0.8f, 1.2f);
                 entity.getWorld().spawnParticle(Particle.CRIT,
                         entity.getLocation().add(0, 1, 0), 5, 0.2, 0.2, 0.2, 0.05);
+                        
+                if (sl.getLevel() >= 5) {
+                    for (int i = 0; i < 2; i++) {
+                        Location shardLoc = entity.getLocation().add(0, 1, 0);
+                        Vector randomDir = new Vector(Math.random() - 0.5, Math.random(), Math.random() - 0.5).normalize();
+                        entity.getWorld().spawnParticle(Particle.CRIT, shardLoc, 10, randomDir.getX(), randomDir.getY(), randomDir.getZ(), 0.5);
+                        for (Entity nearby : entity.getWorld().getNearbyEntities(shardLoc, 3.0, 3.0, 3.0)) {
+                            if (nearby instanceof LivingEntity && !nearby.equals(player) && !nearby.equals(entity)) {
+                                Spellbreak.getInstance().getAbilityDamage().damage((LivingEntity) nearby, adjustedDamagePerHit * 0.3, player, BladeSpinAbility.this, "Lancet Shard");
+                            }
+                        }
+                    }
+                }
 
                 hitCounts.put(eid, count + 1);
                 hitNextAllowedTick.put(eid, ticksElapsed + hitCooldownTicks);
@@ -278,6 +298,9 @@ public class BladeSpinAbility implements Ability {
                             new Particle.DustOptions(Color.fromRGB(150, 200, 255), 1.1f));
                     world.spawnParticle(Particle.SMOKE, pLoc, 1, 0.1, 0.1, 0.1, 0.05);
                 }
+            }
+            if (sl.getLevel() >= 3 && ticksElapsed % 3 == 0) {
+                world.spawnParticle(Particle.SWEEP_ATTACK, baseLoc.clone().add(0, 0.5, 0), 2, adjustedRadius, 0.5, adjustedRadius, 0.1);
             }
         }
 

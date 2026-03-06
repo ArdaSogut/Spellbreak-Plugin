@@ -93,6 +93,12 @@ public class GaleVortexAbility implements Ability {
         final Vector U = (Utmp.lengthSquared() == 0) ? new Vector(1, 0, 0) : Utmp;
         final Vector V = dir.clone().crossProduct(U).normalize();
 
+        SpellLevel sl = Spellbreak.getInstance().getLevelManager().getSpellLevel(
+            player.getUniqueId(),
+            Spellbreak.getInstance().getPlayerDataManager().getPlayerClass(player.getUniqueId()),
+            getName()
+        );
+
         // Seviye bazlı değerler
         double adjustedDamage = getAdjustedDamage(player);
         double adjustedRange = getAdjustedRange(player);
@@ -124,6 +130,9 @@ public class GaleVortexAbility implements Ability {
 
                         // Main particles
                         world.spawnParticle(Particle.CLOUD, spawnLoc, 3, 0.02, 0.02, 0.02, 0.02);
+                        if (sl.getLevel() >= 3) {
+                            world.spawnParticle(Particle.CLOUD, spawnLoc, 5, 0.2, 0.2, 0.2, 0.05);
+                        }
                         world.spawnParticle(Particle.ASH, spawnLoc.clone().add(0, 0.2, 0), 2, 0.05, 0.05, 0.05, 0.02);
 
                         // Entity handling
@@ -139,6 +148,11 @@ public class GaleVortexAbility implements Ability {
                             Spellbreak.getInstance().getAbilityDamage().damage(
                                     entity, adjustedDamage, player, GaleVortexAbility.this, "GaleVortex"
                             );
+                            
+                            // Level 5+: Lightning on pull-in
+                            if (sl.getLevel() >= 5) {
+                                world.strikeLightningEffect(entity.getLocation());
+                            }
 
                             // Calculate natural pull
                             Location playerLoc = player.getLocation();

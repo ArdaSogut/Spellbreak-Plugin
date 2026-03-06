@@ -7,9 +7,10 @@ import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
-import org.bukkit.event.block.Action;
 import org.bukkit.scheduler.BukkitRunnable;
+import org.bukkit.event.block.Action;
 import org.bukkit.util.Vector;
+import me.ratatamakata.spellbreak.level.SpellLevel;
 
 import java.util.*;
 
@@ -61,6 +62,15 @@ public class RunecarverAbility implements Ability {
         World world = player.getWorld();
         Location eye = player.getEyeLocation();
         Vector direction = eye.getDirection().clone().normalize();
+        
+        SpellLevel sl = Spellbreak.getInstance().getLevelManager().getSpellLevel(
+                player.getUniqueId(),
+                Spellbreak.getInstance().getPlayerDataManager().getPlayerClass(player.getUniqueId()),
+                getName()
+        );
+        double adjustedDamage = damage * sl.getDamageMultiplier();
+        double adjustedRange = range * sl.getRangeMultiplier();
+        double adjustedDuration = maxReturnTime * sl.getDurationMultiplier();
 
         world.playSound(eye, Sound.ENTITY_ILLUSIONER_CAST_SPELL, 1.0f, 1.0f);
 
@@ -70,7 +80,7 @@ public class RunecarverAbility implements Ability {
         Location leftStart = eye.clone().add(rightVec.clone().multiply(bladeSpacing / 2));
         Location rightStart = eye.clone().add(rightVec.clone().multiply(-bladeSpacing / 2));
 
-        RuneBladePair bladePair = new RuneBladePair(player, leftStart, rightStart, direction);
+        RuneBladePair bladePair = new RuneBladePair(player, leftStart, rightStart, direction, adjustedDamage, adjustedRange, adjustedDuration, sl);
         activeBlades.put(player.getUniqueId(), bladePair);
         bladePair.launch();
 
@@ -120,12 +130,21 @@ public class RunecarverAbility implements Ability {
         private final Set<UUID> hitSet = new HashSet<>();
         private int taskId;
         private long startTime;
+        
+        private final double adjustedDamage;
+        private final double adjustedRange;
+        private final double adjustedDuration;
+        private final SpellLevel sl;
 
-        RuneBladePair(Player owner, Location leftStart, Location rightStart, Vector direction) {
+        RuneBladePair(Player owner, Location leftStart, Location rightStart, Vector direction, double dmg, double rng, double dur, SpellLevel lvl) {
             this.owner = owner;
             this.leftBlade = new RuneBlade(leftStart, direction);
             this.rightBlade = new RuneBlade(rightStart, direction);
             this.startTime = System.currentTimeMillis();
+            this.adjustedDamage = dmg;
+            this.adjustedRange = rng;
+            this.adjustedDuration = dur;
+            this.sl = lvl;
         }
 
         void launch() {
@@ -139,7 +158,7 @@ public class RunecarverAbility implements Ability {
                     }
 
                     // Check max duration
-                    if ((System.currentTimeMillis() - startTime) / 1000.0 > maxReturnTime) {
+                    if ((System.currentTimeMillis() - startTime) / 1000.0 > adjustedDuration) {
                         cancel();
                         return;
                     }
@@ -151,8 +170,8 @@ public class RunecarverAbility implements Ability {
                     // Render both blades
                     float angle = (float) (Math.sin(System.currentTimeMillis() * 0.005) * Math.PI / 4); // swing ±45 degrees
 
-                    leftBlade.render(returning, true, angle);
-                    rightBlade.render(returning, false, angle);
+                    leftBlade.render(returning, true, angle, sl);
+                    rightBlade.render(returning, false, angle, sl);
 
                     // Check for hits on both blades (during forward AND return)
                     boolean hitSomething = checkHits();
@@ -161,7 +180,7 @@ public class RunecarverAbility implements Ability {
                     if (!returning) {
                         double leftDist = leftBlade.getLocation().distance(owner.getEyeLocation());
                         double rightDist = rightBlade.getLocation().distance(owner.getEyeLocation());
-                        if (hitSomething || Math.max(leftDist, rightDist) >= range) {
+                        if (hitSomething || Math.max(leftDist, rightDist) >= adjustedRange) {
                             startReturn();
                         }
                     }
@@ -204,13 +223,22 @@ public class RunecarverAbility implements Ability {
 
                     Spellbreak.getInstance()
                             .getAbilityDamage()
-                            .damage((LivingEntity) e, damage, owner, RunecarverAbility.this, null);
+                            .damage((LivingEntity) e, adjustedDamage, owner, RunecarverAbility.this, null);
                     e.getWorld().playSound(e.getLocation(), Sound.ENTITY_PLAYER_ATTACK_SWEEP, 1.0f, 1.2f);
                     e.getWorld().spawnParticle(Particle.CRIT, e.getLocation().add(0, 1, 0), 20, 0.5, 0.5, 0.5, 0.3);
+                    
+                    if (sl.getLevel() >= 5) {
+                        e.getWorld().spawnParticle(Particle.EXPLOSION, e.getLocation().add(0, 1, 0), 1); // L5 Explosive Rune
+                        for (Entity nearby : e.getWorld().getNearbyEntities(e.getLocation(), 2.0, 2.0, 2.0)) {
+                            if (nearby instanceof LivingEntity && !nearby.equals(owner) && !nearby.equals(e)) {
+                                Spellbreak.getInstance().getAbilityDamage().damage((LivingEntity) nearby, adjustedDamage * 0.5, owner, RunecarverAbility.this, "Explosive Rune");
+                            }
+                        }
+                    }
 
                     if (e instanceof Player) {
                         owner.sendMessage(ChatColor.GOLD + "Your blade hit " + ChatColor.RED
-                                + ((Player) e).getName() + ChatColor.GOLD + " for " + ChatColor.RED + damage + ChatColor.GOLD + " dmg!");
+                                + ((Player) e).getName() + ChatColor.GOLD + " for " + ChatColor.RED + String.format("%.1f", adjustedDamage) + ChatColor.GOLD + " dmg!");
                     }
                     hitSomething = true;
                 }
@@ -269,7 +297,7 @@ public class RunecarverAbility implements Ability {
             return loc.clone();
         }
 
-        void render(boolean returning, boolean isLeftBlade, float angle) {
+        void render(boolean returning, boolean isLeftBlade, float angle, SpellLevel lvl) {
             World w = loc.getWorld();
             if (w == null) return;
 
@@ -318,6 +346,10 @@ public class RunecarverAbility implements Ability {
             groundContact.setY(loc.getWorld().getHighestBlockYAt(loc) + 0.1);
             w.spawnParticle(Particle.DUST, groundContact, 2, 0.2, 0, 0.2, 0,
                     new Particle.DustOptions(Color.fromRGB(200, 200, 200), 0.8f));
+                    
+            if (lvl.getLevel() >= 3) {
+                w.spawnParticle(Particle.LAVA, loc, 1, 0.1, 0.1, 0.1, 0.0);
+            }
         }
     }
 }

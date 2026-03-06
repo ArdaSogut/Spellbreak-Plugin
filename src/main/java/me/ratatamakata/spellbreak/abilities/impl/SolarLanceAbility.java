@@ -5,6 +5,7 @@ import me.ratatamakata.spellbreak.abilities.Ability;
 import org.bukkit.*;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.entity.Entity;
+import me.ratatamakata.spellbreak.level.SpellLevel;
 import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
 import org.bukkit.event.block.Action;
@@ -69,17 +70,20 @@ public class SolarLanceAbility implements Ability {
         // Store hit entities for this cast to prevent multiple hits
         hitEntities.put(player.getUniqueId(), new HashSet<>());
 
+        SpellLevel sl = Spellbreak.getInstance().getLevelManager()
+                .getSpellLevel(player.getUniqueId(), Spellbreak.getInstance().getPlayerDataManager().getPlayerClass(player.getUniqueId()), getName());
+
         // Give initial velocity boost
         Vector initialVelocity = direction.clone().multiply(dashVelocity);
         player.setVelocity(initialVelocity);
 
         // Start the dash effects and monitoring
-        startSolarLanceDash(player, direction);
+        startSolarLanceDash(player, direction, sl);
 
         player.playSound(player.getLocation(), Sound.ENTITY_BLAZE_SHOOT, 1.0f, 0.8f);
     }
 
-    private void startSolarLanceDash(Player player, Vector initialDirection) {
+    private void startSolarLanceDash(Player player, Vector initialDirection, SpellLevel sl) {
         BukkitRunnable dashTask = new BukkitRunnable() {
             private int ticksElapsed = 0;
             private Vector currentDirection = initialDirection.clone();
@@ -129,11 +133,11 @@ public class SolarLanceAbility implements Ability {
 
                 // Spawn visual effects at player's current location
                 Location playerLoc = player.getLocation();
-                spawnSolarTrail(playerLoc, currentDirection);
+                spawnSolarTrail(playerLoc, currentDirection, sl);
                 spawnSolarLance(playerLoc, lanceDirection); // Lance follows horizontal look
 
                 // Check for entities to damage using fixed direction - if hit, end the dash
-                if (checkForEnemies(player, playerLoc)) {
+                if (checkForEnemies(player, playerLoc, sl)) {
                     cleanup(player);
                     this.cancel();
                     return;
@@ -160,7 +164,7 @@ public class SolarLanceAbility implements Ability {
         }
     }
 
-    private void spawnSolarTrail(Location loc, Vector direction) {
+    private void spawnSolarTrail(Location loc, Vector direction, SpellLevel sl) {
         World world = loc.getWorld();
         if (world == null) return;
 
@@ -173,6 +177,12 @@ public class SolarLanceAbility implements Ability {
 
         // Fewer flame particles
         world.spawnParticle(Particle.FLAME, trailLoc, 2, 0.1, 0.1, 0.1, 0.02);
+
+        // L3: Solar Flare Trail
+        if (sl.getLevel() >= 3 && Math.random() < 0.5) {
+            world.spawnParticle(Particle.CAMPFIRE_COSY_SMOKE, trailLoc, 1, 0.1, 0.1, 0.1, 0.02);
+            world.spawnParticle(Particle.LAVA, trailLoc, 1, 0.1, 0.1, 0.1, 0);
+        }
     }
 
     private void spawnSolarLance(Location loc, Vector direction) {
@@ -281,7 +291,7 @@ public class SolarLanceAbility implements Ability {
         }
     }
 
-    private boolean checkForEnemies(Player caster, Location loc) {
+    private boolean checkForEnemies(Player caster, Location loc, SpellLevel sl) {
         Set<UUID> alreadyHit = hitEntities.get(caster.getUniqueId());
         if (alreadyHit == null) return false;
 
@@ -291,11 +301,15 @@ public class SolarLanceAbility implements Ability {
         Vector lanceDirection = fixedLanceDirections.get(caster.getUniqueId());
         if (lanceDirection == null) lanceDirection = caster.getLocation().getDirection();
 
+        double scaledLanceHitRange = lanceHitRange * sl.getRangeMultiplier();
+        double scaledHitRadius = hitRadius * sl.getRangeMultiplier();
+        double scaledDamage = damage * sl.getDamageMultiplier();
+
         // Check multiple points along the lance for hits (lance extends forward)
-        for (double range = 0; range <= lanceHitRange; range += 0.5) {
+        for (double range = 0; range <= scaledLanceHitRange; range += 0.5) {
             Location checkPoint = loc.clone().add(lanceDirection.clone().multiply(range));
 
-            for (Entity entity : checkPoint.getWorld().getNearbyEntities(checkPoint, hitRadius, hitRadius, hitRadius)) {
+            for (Entity entity : checkPoint.getWorld().getNearbyEntities(checkPoint, scaledHitRadius, scaledHitRadius, scaledHitRadius)) {
                 if (entity instanceof LivingEntity && entity != caster && !alreadyHit.contains(entity.getUniqueId())) {
                     LivingEntity target = (LivingEntity) entity;
 
@@ -305,11 +319,20 @@ public class SolarLanceAbility implements Ability {
 
                     // Deal damage
                     Spellbreak.getInstance().getAbilityDamage().damage(
-                            target, damage, caster, this, "SolarLance"
+                            target, scaledDamage, caster, this, "SolarLance"
                     );
 
+                    int scaledFireTicks = fireTickDuration;
+
+                    // L5: Burning lance persistence
+                    if (sl.getLevel() >= 5) {
+                        scaledFireTicks *= 2;
+                        target.getWorld().spawnParticle(Particle.FLAME, target.getLocation(), 20, 0.5, 1, 0.5, 0.05);
+                        target.getWorld().spawnParticle(Particle.LAVA, target.getLocation(), 5, 0.5, 1, 0.5, 0.05);
+                    }
+
                     // Apply fire ticks
-                    target.setFireTicks(fireTickDuration);
+                    target.setFireTicks(scaledFireTicks);
 
                     // Apply knockback
                     Vector knockback = target.getLocation().toVector().subtract(caster.getLocation().toVector());

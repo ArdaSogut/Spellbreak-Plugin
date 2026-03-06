@@ -174,7 +174,7 @@ public class PhantomEchoAbility implements Ability {
             @Override public void run() {
                 Location burstLoc = data.location.clone().add(0, 1, 0);
                 clearExistingClone(uuid, true);
-                spawnDamageBurst(burstLoc, player);
+                spawnDamageBurst(burstLoc, player, spellLevel, returnDamage * spellLevel.getDamageMultiplier(), returnDamageRadius * spellLevel.getRangeMultiplier());
             }
         }.runTaskLater(Spellbreak.getInstance(), adjustedCloneDuration);
 
@@ -190,12 +190,17 @@ public class PhantomEchoAbility implements Ability {
         Location triggerLoc = player.getLocation().clone();
         Location loc = data.location.clone().add(0, 1, 0);
 
+        SpellLevel sl = Spellbreak.getInstance().getLevelManager()
+                .getSpellLevel(uuid, Spellbreak.getInstance().getPlayerDataManager().getPlayerClass(uuid), "PhantomEcho");
+        double scaledReturnDamage = returnDamage * sl.getDamageMultiplier();
+        double scaledReturnRadius = returnDamageRadius * sl.getRangeMultiplier();
+
         // Teleport player back to clone location
         player.teleport(loc);
 
         // Damage bursts at departure and arrival
-        spawnDamageBurst(triggerLoc, player);
-        spawnDamageBurst(loc, player);
+        spawnDamageBurst(triggerLoc, player, sl, scaledReturnDamage, scaledReturnRadius);
+        spawnDamageBurst(loc, player, sl, scaledReturnDamage, scaledReturnRadius);
 
         // Clear clone, apply cooldown
         clearExistingClone(uuid, true);
@@ -204,7 +209,7 @@ public class PhantomEchoAbility implements Ability {
         removeInvisibility(player);
     }
 
-    private void spawnDamageBurst(Location loc, Player player) {
+    private void spawnDamageBurst(Location loc, Player player, SpellLevel sl, double dmg, double radius) {
         loc.getWorld().spawnParticle(
                 Particle.DUST,
                 loc,
@@ -214,13 +219,23 @@ public class PhantomEchoAbility implements Ability {
                 new Particle.DustOptions(Color.fromRGB(255, 105, 180), 2.0f),
                 true
         );
-        for (Entity e : loc.getWorld().getNearbyEntities(loc, returnDamageRadius, returnDamageRadius, returnDamageRadius)) {
+        // Level 3+: Extra PORTAL particles on burst
+        if (sl.getLevel() >= 3) {
+            loc.getWorld().spawnParticle(Particle.PORTAL, loc, 50, 1.5, 1.5, 1.5, 0.5);
+        }
+
+        for (Entity e : loc.getWorld().getNearbyEntities(loc, radius, radius, radius)) {
             if (e instanceof LivingEntity target &&
                     !target.equals(player) &&
                     !isCloneEntity(target)) {
-                Spellbreak.getInstance().getAbilityDamage().damage(target, returnDamage, player, this, "CloneReturn");
+                Spellbreak.getInstance().getAbilityDamage().damage(target, dmg, player, this, "CloneReturn");
                 Vector knock = target.getLocation().toVector().subtract(loc.toVector()).normalize().multiply(0.5);
                 target.setVelocity(knock);
+                
+                // Level 5+: Blindness on damaged enemies
+                if (sl.getLevel() >= 5) {
+                    target.addPotionEffect(new org.bukkit.potion.PotionEffect(org.bukkit.potion.PotionEffectType.BLINDNESS, 60, 0));
+                }
             }
         }
         loc.getWorld().playSound(loc, Sound.ENTITY_ENDERMAN_TELEPORT, 1f, 2f);

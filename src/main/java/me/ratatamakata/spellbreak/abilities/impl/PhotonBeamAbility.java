@@ -5,6 +5,7 @@ import me.ratatamakata.spellbreak.abilities.Ability;
 import org.bukkit.*;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.entity.Entity;
+import me.ratatamakata.spellbreak.level.SpellLevel;
 import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
 import org.bukkit.event.block.Action;
@@ -66,7 +67,9 @@ public class PhotonBeamAbility implements Ability {
         }
 
         player.sendMessage(ChatColor.GREEN + "Starting Photon Beam charge...");
-        ChargingState state = new ChargingState(player);
+        SpellLevel sl = Spellbreak.getInstance().getLevelManager()
+                .getSpellLevel(uuid, Spellbreak.getInstance().getPlayerDataManager().getPlayerClass(uuid), getName());
+        ChargingState state = new ChargingState(player, sl);
         chargingPlayers.put(uuid, state);
         state.start();
     }
@@ -114,14 +117,16 @@ public class PhotonBeamAbility implements Ability {
 
     private class ChargingState {
         private final Player player;
+        private final SpellLevel sl;
         private BukkitTask task;
         private int chargeTicks = 0;
         private final List<Vector> initialBeamOffsets = new ArrayList<>();
         private final Set<UUID> damagedEntities = new HashSet<>();
         private int lastDamageTick = 0;
 
-        public ChargingState(Player player) {
+        public ChargingState(Player player, SpellLevel sl) {
             this.player = player;
+            this.sl = sl;
             // Initialize random beam offsets (not absolute directions)
             for (int i = 0; i < beamCount; i++) {
                 initialBeamOffsets.add(generateRandomOffset());
@@ -346,9 +351,10 @@ public class PhotonBeamAbility implements Ability {
                     LivingEntity target = (LivingEntity) result.getHitEntity();
 
                     // Much reduced damage during charging and add to damaged set
+                    double scaledMinDamage = minDamage * sl.getDamageMultiplier();
                     Spellbreak.getInstance().getAbilityDamage().damage(
                             target,
-                            minDamage * 0.1, // Very reduced damage during charging
+                            scaledMinDamage * 0.1, // Very reduced damage during charging
                             player,
                             PhotonBeamAbility.this,
                             "PhotonBeam"
@@ -383,7 +389,10 @@ public class PhotonBeamAbility implements Ability {
             }
 
             // Calculate damage based on charge time
-            double damage = minDamage + (maxDamage - minDamage) *
+            double scaledMinDamage = minDamage * sl.getDamageMultiplier();
+            double scaledMaxDamage = maxDamage * sl.getDamageMultiplier();
+            
+            double damage = scaledMinDamage + (scaledMaxDamage - scaledMinDamage) *
                     Math.min(1.0, (double) (chargeTicks - focusTime) / (maxChargeTime - focusTime));
 
             player.sendMessage(ChatColor.GREEN + "Releasing focused beam with " + String.format("%.1f", damage) + " damage!");
@@ -397,11 +406,13 @@ public class PhotonBeamAbility implements Ability {
             Location eyeLoc = player.getEyeLocation();
             Vector direction = player.getLocation().getDirection();
 
+            double scaledBeamRange = beamRange * sl.getRangeMultiplier();
+            
             // Find actual target point
             RayTraceResult rayTrace = player.getWorld().rayTraceBlocks(
                     eyeLoc,
                     direction,
-                    25, // Extended range for final beam
+                    scaledBeamRange, // Extended range for final beam
                     FluidCollisionMode.NEVER,
                     true
             );
@@ -410,7 +421,7 @@ public class PhotonBeamAbility implements Ability {
             if (rayTrace != null && rayTrace.getHitBlock() != null) {
                 targetPoint = rayTrace.getHitPosition().toLocation(player.getWorld());
             } else {
-                targetPoint = eyeLoc.clone().add(direction.clone().multiply(25));
+                targetPoint = eyeLoc.clone().add(direction.clone().multiply(scaledBeamRange));
             }
 
             // Start the final beam from a point closer to the player but still in front
@@ -418,6 +429,7 @@ public class PhotonBeamAbility implements Ability {
 
             World world = player.getWorld();
             Set<UUID> finalDamagedEntities = new HashSet<>();
+            Set<UUID> bouncedEntities = new HashSet<>();
 
             // Enhanced final beam effect
             new BukkitRunnable() {
@@ -458,8 +470,42 @@ public class PhotonBeamAbility implements Ability {
                                 world.spawnParticle(Particle.FLASH, e.getLocation().add(0, 1, 0), 5);
                                 world.spawnParticle(Particle.EXPLOSION, e.getLocation(), 3, 0.3, 0.3, 0.3, 0);
                                 world.spawnParticle(Particle.ELECTRIC_SPARK, e.getLocation().add(0, 1, 0), 8, 0.5, 0.5, 0.5, 0.1);
+                                
+                                // L5 Bounce
+                                if (sl.getLevel() >= 5 && !bouncedEntities.contains(e.getUniqueId())) {
+                                    bouncedEntities.add(e.getUniqueId());
+                                    performBounce((LivingEntity) e, damage * 0.5, finalDamagedEntities);
+                                }
                             }
                         }
+                    }
+                }
+                
+                private void performBounce(LivingEntity source, double bounceDamage, Set<UUID> damaged) {
+                    LivingEntity target = null;
+                    double closestDist = Double.MAX_VALUE;
+                    for (Entity ent : source.getNearbyEntities(8, 8, 8)) {
+                        if (ent instanceof LivingEntity && ent != player && ent != source && !damaged.contains(ent.getUniqueId())) {
+                            double dist = ent.getLocation().distanceSquared(source.getLocation());
+                            if (dist < closestDist) {
+                                closestDist = dist;
+                                target = (LivingEntity) ent;
+                            }
+                        }
+                    }
+                    if (target != null) {
+                        damaged.add(target.getUniqueId());
+                        Spellbreak.getInstance().getAbilityDamage().damage(
+                            target, bounceDamage, player, PhotonBeamAbility.this, "PhotonBeam Bounce"
+                        );
+                        // Visual for bounce
+                        Vector bounceDir = target.getLocation().toVector().subtract(source.getLocation().toVector()).normalize();
+                        double steps = Math.sqrt(closestDist);
+                        for (double v = 0; v < steps; v += 0.5) {
+                            Location p = source.getLocation().add(0, 1, 0).add(bounceDir.clone().multiply(v));
+                            world.spawnParticle(Particle.FIREWORK, p, 2, 0.1, 0.1, 0.1, 0);
+                        }
+                        world.spawnParticle(Particle.FLASH, target.getLocation().add(0, 1, 0), 2);
                     }
                 }
 
@@ -483,6 +529,10 @@ public class PhotonBeamAbility implements Ability {
 
                     // Add electric sparks for more energy
                     world.spawnParticle(Particle.ELECTRIC_SPARK, center, 8, 0.2, 0.2, 0.2, 0.05);
+                    
+                    if (sl.getLevel() >= 3) {
+                        world.spawnParticle(Particle.END_ROD, center, 2, 0.2, 0.2, 0.2, 0.01);
+                    }
                 }
             }.runTaskTimer(Spellbreak.getInstance(), 0, 1);
         }

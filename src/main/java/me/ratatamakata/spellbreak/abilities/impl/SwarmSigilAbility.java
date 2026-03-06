@@ -8,8 +8,11 @@ import org.bukkit.entity.*;
 import org.bukkit.event.block.Action;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
+import org.bukkit.potion.PotionEffect;
+import org.bukkit.potion.PotionEffectType;
 import org.bukkit.scheduler.BukkitRunnable;
 import org.bukkit.util.Vector;
+import me.ratatamakata.spellbreak.level.SpellLevel;
 
 import java.util.*;
 import java.util.concurrent.ThreadLocalRandom;
@@ -59,10 +62,19 @@ public class SwarmSigilAbility implements Ability {
         UUID uuid = player.getUniqueId();
         removeDrones(uuid);
 
-        int count = ThreadLocalRandom.current().nextInt(minDrones, maxDrones + 1);
+        SpellLevel sl = Spellbreak.getInstance().getLevelManager().getSpellLevel(
+                uuid,
+                Spellbreak.getInstance().getPlayerDataManager().getPlayerClass(uuid),
+                getName()
+        );
+
+        int minD = Math.max(1, (int)Math.round(minDrones * sl.getDamageMultiplier()));
+        int maxD = Math.max(1, (int)Math.round(maxDrones * sl.getDamageMultiplier()));
+        int count = ThreadLocalRandom.current().nextInt(minD, maxD + 1);
+        
         List<SwarmDrone> drones = new ArrayList<>();
         for (int i = 0; i < count; i++) {
-            SwarmDrone d = new SwarmDrone(player);
+            SwarmDrone d = new SwarmDrone(player, sl);
             drones.add(d);
             d.start();
         }
@@ -98,9 +110,13 @@ public class SwarmSigilAbility implements Ability {
         private Location wanderTarget;
         private final ItemDisplay display;
         private boolean exploded = false;
+        private final SpellLevel sl;
+        private final double adjustedExplosionDamage;
 
-        public SwarmDrone(Player owner) {
+        public SwarmDrone(Player owner, SpellLevel sl) {
             this.owner = owner;
+            this.sl = sl;
+            this.adjustedExplosionDamage = explosionDamage * sl.getDamageMultiplier();
             Location c = owner.getLocation().add(0, 1.5, 0);
             double angle = ThreadLocalRandom.current().nextDouble(0, 2 * Math.PI);
             double r = ThreadLocalRandom.current().nextDouble(0, wanderRadius);
@@ -113,6 +129,13 @@ public class SwarmSigilAbility implements Ability {
             display.setItemStack(paper);
             display.setGravity(false);
             display.setBillboard(Display.Billboard.FIXED);
+            
+            if (sl.getLevel() >= 3) { // L3: Bigger bees
+                org.bukkit.util.Transformation t = display.getTransformation();
+                t.getScale().set(1.5f, 1.5f, 1.5f);
+                display.setTransformation(t);
+            }
+            
             display.teleport(location);
         }
 
@@ -199,8 +222,12 @@ public class SwarmSigilAbility implements Ability {
                 LivingEntity le = (LivingEntity) en;
                 double d = location.distance(le.getLocation());
                 double mul = 1.0 - (d / explosionRadius);
-                double dmg = explosionDamage * Math.max(0.2, mul);
+                double dmg = adjustedExplosionDamage * Math.max(0.2, mul);
                 Spellbreak.getInstance().getAbilityDamage().damage(le, dmg, owner, SwarmSigilAbility.this, null);
+                
+                if (sl.getLevel() >= 5) {
+                    le.addPotionEffect(new PotionEffect(PotionEffectType.POISON, 60, 1));
+                }
             }
             cleanup();
         }

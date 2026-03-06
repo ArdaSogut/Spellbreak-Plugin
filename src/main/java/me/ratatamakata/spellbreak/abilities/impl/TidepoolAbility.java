@@ -112,6 +112,11 @@ public class TidepoolAbility implements Ability {
     public void activate(Player player) {
         if (!activeCasters.add(player.getUniqueId())) return;
 
+        SpellLevel sl = Spellbreak.getInstance().getLevelManager().getSpellLevel(
+            player.getUniqueId(),
+            Spellbreak.getInstance().getPlayerDataManager().getPlayerClass(player.getUniqueId()),
+            getName()
+        );
         double adjustedRadius = getAdjustedRadius(player);
         double adjustedDamage = getAdjustedDamage(player);
         int adjustedDuration = getAdjustedDuration(player);
@@ -208,6 +213,10 @@ public class TidepoolAbility implements Ability {
                     for (Block b : waterBlocks) {
                         setWater(b);
                         b.getWorld().spawnParticle(Particle.BUBBLE, b.getLocation().add(0.5, 0.5, 0.5), 2, 0.2, 0.2, 0.2, 0.05);
+                        // Level 3+: Extra SPLASH particles
+                        if (sl.getLevel() >= 3) {
+                            b.getWorld().spawnParticle(Particle.SPLASH, b.getLocation().add(0.5, 0.5, 0.5), 2, 0.3, 0.3, 0.3, 0.1);
+                        }
                     }
 
                     double minDist = adjustedRadius - 0.5, maxDist = adjustedRadius + 0.5;
@@ -222,6 +231,10 @@ public class TidepoolAbility implements Ability {
                         UUID id = e.getUniqueId();
                         if (System.currentTimeMillis() - damageCooldowns.getOrDefault(id, 0L) > 1000) {
                             Spellbreak.getInstance().getAbilityDamage().damage((LivingEntity) e, adjustedDamage, player, TidepoolAbility.this, "Tidepool");
+                            // Level 5+: Drowning slowness
+                            if (sl.getLevel() >= 5) {
+                                ((LivingEntity) e).addPotionEffect(new org.bukkit.potion.PotionEffect(org.bukkit.potion.PotionEffectType.SLOWNESS, 40, 1));
+                            }
                             damageCooldowns.put(id, System.currentTimeMillis());
                         }
                     }

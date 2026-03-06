@@ -14,6 +14,7 @@ import org.bukkit.scheduler.BukkitTask;
 import org.bukkit.util.Vector;
 import net.md_5.bungee.api.ChatMessageType;
 import net.md_5.bungee.api.chat.TextComponent;
+import me.ratatamakata.spellbreak.level.SpellLevel;
 
 import java.util.*;
 
@@ -163,12 +164,26 @@ public class RunicJumpPadAbility implements Ability {
         Location center = targetBlock.getLocation().add(0.5, 1.1, 0.5);
         consumeCharge(playerUUID);
         lastUsedTime.put(playerUUID, now);
+        
+        SpellLevel sl = Spellbreak.getInstance().getLevelManager().getSpellLevel(playerUUID, Spellbreak.getInstance().getPlayerDataManager().getPlayerClass(playerUUID), getName());
 
         // Create the pad
         List<ActivePad> pads = playerPads.computeIfAbsent(playerUUID, k -> new ArrayList<>());
-        ActivePad pad = new ActivePad(player, center);
+        ActivePad pad = new ActivePad(player, center, sl);
         pads.add(pad);
         pad.start();
+        
+        if (sl.getLevel() >= 5) {
+            // L5: AoE launch nearby upon placement
+            player.getWorld().spawnParticle(Particle.EXPLOSION, center, 1);
+            player.getWorld().playSound(center, Sound.ENTITY_GENERIC_EXPLODE, 0.8f, 1.2f);
+            for (Entity entity : center.getWorld().getNearbyEntities(center, 4.0, 4.0, 4.0)) {
+                if (entity instanceof org.bukkit.entity.LivingEntity && !entity.equals(player)) {
+                    Vector push = entity.getLocation().toVector().subtract(center.toVector()).normalize().multiply(1.2).setY(1.5);
+                    entity.setVelocity(push);
+                }
+            }
+        }
 
         successfulActivation = true;
     }
@@ -189,10 +204,24 @@ public class RunicJumpPadAbility implements Ability {
         private long expireTime;
         private final int padId;
         private int tick = 0;
+        private final SpellLevel sl;
+        
+        private final double adjustedCasterLaunch;
+        private final double adjustedEntityLaunch;
+        private final double adjustedCasterY;
+        private final double adjustedEntityY;
+        private final int adjustedActiveTicks;
 
-        ActivePad(Player player, Location center) {
+        ActivePad(Player player, Location center, SpellLevel lvl) {
             this.player = player;
             this.center = center;
+            this.sl = lvl;
+            
+            this.adjustedCasterLaunch = casterLaunchPower * sl.getRangeMultiplier();
+            this.adjustedEntityLaunch = entityLaunchPower * sl.getRangeMultiplier();
+            this.adjustedCasterY = casterYBoost * sl.getRangeMultiplier();
+            this.adjustedEntityY = entityYBoost * sl.getRangeMultiplier();
+            this.adjustedActiveTicks = (int)(activeTicks * sl.getDurationMultiplier());
 
             // Generate a unique pad ID (index in the list + 1)
             List<ActivePad> pads = playerPads.getOrDefault(player.getUniqueId(), Collections.emptyList());
@@ -213,10 +242,10 @@ public class RunicJumpPadAbility implements Ability {
                     if (tick < buildTicks) {
                         // Build up effect
                         drawPadFilled(center, radius * ((double)tick/buildTicks));
-                    } else if (tick < buildTicks + activeTicks) {
+                    } else if (tick < buildTicks + adjustedActiveTicks) {
                         if (!ready) {
                             ready = true;
-                            expireTime = System.currentTimeMillis() + (activeTicks * 50);
+                            expireTime = System.currentTimeMillis() + (adjustedActiveTicks * 50);
                             // Announce pad is ready
                             player.playSound(center, Sound.BLOCK_CONDUIT_ACTIVATE, 0.8f, 1.2f);
                         }
@@ -228,6 +257,11 @@ public class RunicJumpPadAbility implements Ability {
                                 drawPadOutline(center.clone().add(0, y, 0), radius);
                             }
                         }
+                        if (sl.getLevel() >= 3 && tick % 5 == 0) {
+                            // L3: Rune ring
+                            drawPadOutline(center.clone().add(0, 0.1, 0), radius * 1.2);
+                            center.getWorld().spawnParticle(Particle.ENCHANT, center.clone().add(0, 0.5, 0), 5, radius, 0.5, radius, 0.05);
+                        }
 
                         // Launch entities
                         for (Entity entity : center.getWorld().getNearbyEntities(center, radius, padHeight, radius)) {
@@ -235,13 +269,13 @@ public class RunicJumpPadAbility implements Ability {
                                 Vector velocity;
                                 if (entity.getUniqueId().equals(player.getUniqueId())) {
                                     // Launch player in look direction with Y boost
-                                    velocity = player.getLocation().getDirection().multiply(casterLaunchPower).setY(casterYBoost);
+                                    velocity = player.getLocation().getDirection().multiply(adjustedCasterLaunch).setY(adjustedCasterY);
                                 } else {
                                     // Launch other entities with different settings
-                                    velocity = new Vector(0, entityYBoost, 0);
+                                    velocity = new Vector(0, adjustedEntityY, 0);
 
                                     // Add some horizontal movement for entities based on their position relative to center
-                                    if (entityLaunchPower > 0) {
+                                    if (adjustedEntityLaunch > 0) {
                                         Location entityLoc = entity.getLocation();
                                         double dx = entityLoc.getX() - center.getX();
                                         double dz = entityLoc.getZ() - center.getZ();
@@ -249,7 +283,7 @@ public class RunicJumpPadAbility implements Ability {
                                         // Normalize and scale
                                         double dist = Math.sqrt(dx*dx + dz*dz);
                                         if (dist > 0.1) {
-                                            double factor = entityLaunchPower / dist;
+                                            double factor = adjustedEntityLaunch / dist;
                                             velocity.setX(dx * factor);
                                             velocity.setZ(dz * factor);
                                         }
@@ -283,11 +317,11 @@ public class RunicJumpPadAbility implements Ability {
                 String message;
                 if (tick < buildTicks) {
                     message = ChatColor.AQUA + name + " #" + padId + ": " + ChatColor.WHITE +
-                            charges + "/" + maxCharges + ChatColor.GRAY + " | " +
+                            charges + "/" + getMaxCharges(player.getUniqueId()) + ChatColor.GRAY + " | " +
                             ChatColor.YELLOW + "Building...";
                 } else {
                     message = ChatColor.AQUA + name + " #" + padId + ": " + ChatColor.WHITE +
-                            charges + "/" + maxCharges + ChatColor.GRAY + " | " +
+                            charges + "/" + getMaxCharges(player.getUniqueId()) + ChatColor.GRAY + " | " +
                             ChatColor.GREEN + "Active";
                 }
 
@@ -344,8 +378,13 @@ public class RunicJumpPadAbility implements Ability {
     }
 
     // Charge system methods
+    private int getMaxCharges(UUID playerUUID) {
+        SpellLevel sl = Spellbreak.getInstance().getLevelManager().getSpellLevel(playerUUID, Spellbreak.getInstance().getPlayerDataManager().getPlayerClass(playerUUID), getName());
+        return Math.max(1, (int)Math.round(maxCharges * sl.getDamageMultiplier()));
+    }
+
     private int getCharges(UUID playerUUID) {
-        return playerCharges.computeIfAbsent(playerUUID, k -> maxCharges);
+        return playerCharges.computeIfAbsent(playerUUID, k -> getMaxCharges(playerUUID));
     }
 
     private void consumeCharge(UUID playerUUID) {
@@ -353,7 +392,7 @@ public class RunicJumpPadAbility implements Ability {
         if (current > 0) {
             playerCharges.put(playerUUID, current - 1);
             // If we just used a charge and were at max, start the regen timer
-            if (current == maxCharges) {
+            if (current == getMaxCharges(playerUUID)) {
                 startRegenerationTask(playerUUID);
             }
         }
@@ -361,7 +400,8 @@ public class RunicJumpPadAbility implements Ability {
 
     private void addCharge(UUID playerUUID) {
         int current = getCharges(playerUUID);
-        if (current < maxCharges) {
+        int mCharges = getMaxCharges(playerUUID);
+        if (current < mCharges) {
             playerCharges.put(playerUUID, current + 1);
         }
     }
@@ -376,10 +416,11 @@ public class RunicJumpPadAbility implements Ability {
             @Override
             public void run() {
                 int current = getCharges(playerUUID);
-                if (current < maxCharges) {
+                int mCharges = getMaxCharges(playerUUID);
+                if (current < mCharges) {
                     addCharge(playerUUID);
                     // If not yet max charges, keep the timer running for the next charge
-                    if (getCharges(playerUUID) < maxCharges) {
+                    if (getCharges(playerUUID) < mCharges) {
                         // Task will continue running
                     } else {
                         // Reached max charges, stop this regen task
@@ -407,7 +448,7 @@ public class RunicJumpPadAbility implements Ability {
     // Reset player state
     public void resetPlayer(UUID uuid) {
         cancelPads(uuid);
-        playerCharges.put(uuid, maxCharges); // Reset to full charges
+        playerCharges.put(uuid, getMaxCharges(uuid)); // Reset to full charges
     }
 
     @Override

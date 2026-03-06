@@ -7,6 +7,7 @@ import org.bukkit.boss.BarColor;
 import org.bukkit.boss.BarStyle;
 import org.bukkit.boss.BossBar;
 import org.bukkit.configuration.file.FileConfiguration;
+import me.ratatamakata.spellbreak.level.SpellLevel;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
@@ -56,11 +57,14 @@ public class StarPhaseAbility implements Ability {
     public void activate(Player player) {
         UUID uuid = player.getUniqueId();
 
+        SpellLevel sl = Spellbreak.getInstance().getLevelManager()
+                .getSpellLevel(uuid, Spellbreak.getInstance().getPlayerDataManager().getPlayerClass(uuid), getName());
+
         // If already in StarPhase mode, launch projectile
         if (activeStarPhases.containsKey(uuid)) {
             StarPhaseData data = activeStarPhases.get(uuid);
             if (data.stardust > 0) {
-                launchYinYangProjectile(player, data.stardust);
+                launchYinYangProjectile(player, data.stardust, sl);
                 endStarPhase(uuid);
             } else {
                 player.sendMessage(ChatColor.YELLOW + "No stardust remaining!");
@@ -72,12 +76,13 @@ public class StarPhaseAbility implements Ability {
         boolean hadFlight = player.getAllowFlight();
         boolean wasFlying = player.isFlying();
 
-        StarPhaseData data = new StarPhaseData(player.getLocation(), maxStardust, hadFlight, wasFlying);
+        double scaledMaxStardust = maxStardust * sl.getDurationMultiplier();
+        StarPhaseData data = new StarPhaseData(player.getLocation(), scaledMaxStardust, hadFlight, wasFlying, sl, scaledMaxStardust);
         activeStarPhases.put(uuid, data);
 
         // Create and show boss bar
         data.bossBar = Bukkit.createBossBar(
-                ChatColor.LIGHT_PURPLE + "Stardust: " + String.format("%.1f", data.stardust) + "/" + maxStardust,
+                ChatColor.LIGHT_PURPLE + "Stardust: " + String.format("%.1f", data.stardust) + "/" + scaledMaxStardust,
                 BarColor.PURPLE,
                 BarStyle.SOLID
         );
@@ -119,7 +124,7 @@ public class StarPhaseAbility implements Ability {
                             return;
                         }
 
-                        createFlightParticles(currentLoc);
+                        createFlightParticles(currentLoc, data.sl);
                     }
 
                     lastLocation = currentLoc.clone();
@@ -137,21 +142,21 @@ public class StarPhaseAbility implements Ability {
                     cancel();
                     return;
                 }
-                updateBossBar(data, data.stardust);
+                updateBossBar(data, data.stardust, data.scaledMaxStardust);
             }
         };
         data.bossBarTask.runTaskTimer(Spellbreak.getInstance(), 0, bossBarUpdateInterval);
     }
 
-    private void updateBossBar(StarPhaseData data, double stardust) {
-        float progress = (float) Math.max(0, Math.min(1, stardust / maxStardust));
+    private void updateBossBar(StarPhaseData data, double stardust, double scaledMaxStardust) {
+        float progress = (float) Math.max(0, Math.min(1, stardust / scaledMaxStardust));
         data.bossBar.setProgress(progress);
         data.bossBar.setTitle(
-                ChatColor.LIGHT_PURPLE + "Stardust: " + String.format("%.1f", stardust) + "/" + maxStardust
+                ChatColor.LIGHT_PURPLE + "Stardust: " + String.format("%.1f", stardust) + "/" + scaledMaxStardust
         );
     }
 
-    private void createFlightParticles(Location loc) {
+    private void createFlightParticles(Location loc, SpellLevel sl) {
         World world = loc.getWorld();
         if (world == null) return;
 
@@ -165,10 +170,14 @@ public class StarPhaseAbility implements Ability {
 
             world.spawnParticle(Particle.DUST, particleLoc, 1, 0, 0, 0, 0,
                     new Particle.DustOptions(color, 1.2f));
+            
+            if (sl.getLevel() >= 3) {
+                world.spawnParticle(Particle.END_ROD, particleLoc, 1, 0, 0, 0, 0);
+            }
         }
     }
 
-    private void launchYinYangProjectile(Player player, double stardust) {
+    private void launchYinYangProjectile(Player player, double stardust, SpellLevel sl) {
         Location eyeLoc = player.getEyeLocation();
         Vector direction = eyeLoc.getDirection().normalize();
 
@@ -177,7 +186,7 @@ public class StarPhaseAbility implements Ability {
         player.setVelocity(player.getVelocity().add(launchVelocity));
 
         YinYangProjectile projectile = new YinYangProjectile(
-                player.getWorld(), eyeLoc, direction, player.getUniqueId(), stardust
+                player.getWorld(), eyeLoc, direction, player.getUniqueId(), stardust, sl
         );
         projectile.runTaskTimer(Spellbreak.getInstance(), 0, 1);
         player.getWorld().playSound(eyeLoc, Sound.ENTITY_DRAGON_FIREBALL_EXPLODE, 1.0f, 1.5f);
@@ -233,12 +242,16 @@ public class StarPhaseAbility implements Ability {
         boolean hadFlightBefore;
         boolean wasFlyingBefore;
         BossBar bossBar;
+        SpellLevel sl;
+        double scaledMaxStardust;
 
-        StarPhaseData(Location start, double initialStardust, boolean hadFlight, boolean wasFlying) {
+        StarPhaseData(Location start, double initialStardust, boolean hadFlight, boolean wasFlying, SpellLevel sl, double scaledMaxStardust) {
             this.startLocation = start.clone();
             this.stardust = initialStardust;
             this.hadFlightBefore = hadFlight;
             this.wasFlyingBefore = wasFlying;
+            this.sl = sl;
+            this.scaledMaxStardust = scaledMaxStardust;
         }
     }
 
@@ -248,15 +261,17 @@ public class StarPhaseAbility implements Ability {
         private final Vector dir;
         private final UUID owner;
         private final double stardust;
+        private final SpellLevel sl;
         private double traveled = 0;
         private int tickCount = 0;
 
-        YinYangProjectile(World w, Location start, Vector direction, UUID owner, double stardust) {
+        YinYangProjectile(World w, Location start, Vector direction, UUID owner, double stardust, SpellLevel sl) {
             this.world = w;
             this.loc = start.clone();
             this.dir = direction.clone().multiply(projectileSpeed);
             this.owner = owner;
             this.stardust = stardust;
+            this.sl = sl;
         }
 
         @Override
@@ -304,11 +319,21 @@ public class StarPhaseAbility implements Ability {
 
         private void explode() {
             Location explosionLoc = loc.clone();
-            double damage = stardust * explosionDamagePerStardust;
-            double actualRadius = Math.min(explosionRadius, Math.max(2.0, (stardust / maxStardust) * explosionRadius));
-            world.playSound(explosionLoc, Sound.ENTITY_GENERIC_EXPLODE,2.0f,0.8f);
-            world.spawnParticle(Particle.EXPLOSION,explosionLoc,(int)(actualRadius*2),actualRadius*0.3,actualRadius*0.3,actualRadius*0.3,0);
-            world.spawnParticle(Particle.FLAME,explosionLoc,(int)(actualRadius*5),actualRadius*0.5,actualRadius*0.5,actualRadius*0.5,0.1);
+            
+            double scaledDamagePerStardust = explosionDamagePerStardust * sl.getDamageMultiplier();
+            double scaledExplosionRadius = explosionRadius * sl.getRangeMultiplier();
+            double scaledMaxStardust = maxStardust * sl.getDurationMultiplier();
+            
+            double damage = stardust * scaledDamagePerStardust;
+            double actualRadius = Math.min(scaledExplosionRadius, Math.max(2.0, (stardust / scaledMaxStardust) * scaledExplosionRadius));
+            world.playSound(explosionLoc, Sound.ENTITY_GENERIC_EXPLODE, 2.0f, 0.8f);
+            world.spawnParticle(Particle.EXPLOSION, explosionLoc, (int)(actualRadius * 2), actualRadius * 0.3, actualRadius * 0.3, actualRadius * 0.3, 0);
+            world.spawnParticle(Particle.FLAME, explosionLoc, (int)(actualRadius * 5), actualRadius * 0.5, actualRadius * 0.5, actualRadius * 0.5, 0.1);
+
+            if (sl.getLevel() >= 5) {
+                world.spawnParticle(Particle.FLASH, explosionLoc, 1);
+                world.spawnParticle(Particle.FIREWORK, explosionLoc, 100, actualRadius, actualRadius, actualRadius, 0.2);
+            }
 
             Player casterPlayer = Bukkit.getPlayer(owner);
             if (casterPlayer != null) {

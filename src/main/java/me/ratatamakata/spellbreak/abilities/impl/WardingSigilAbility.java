@@ -2,9 +2,9 @@ package me.ratatamakata.spellbreak.abilities.impl;
 
 import me.ratatamakata.spellbreak.Spellbreak;
 import me.ratatamakata.spellbreak.abilities.Ability;
-import org.bukkit.*;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.entity.Player;
+import me.ratatamakata.spellbreak.level.SpellLevel;
 import org.bukkit.event.block.Action;
 import org.bukkit.scheduler.BukkitRunnable;
 import org.bukkit.util.Vector;
@@ -64,14 +64,21 @@ public class WardingSigilAbility implements Ability {
     @Override
     public void activate(Player player) {
         World world = player.getWorld();
+        
+        SpellLevel sl = Spellbreak.getInstance().getLevelManager().getSpellLevel(
+                player.getUniqueId(),
+                Spellbreak.getInstance().getPlayerDataManager().getPlayerClass(player.getUniqueId()),
+                getName()
+        );
+        int adjustedShields = Math.max(1, (int)Math.round(numberOfShields * sl.getDamageMultiplier()));
+        int adjustedDuration = (int)(shieldDuration * sl.getDurationMultiplier());
+
         // Play activation sound
         world.playSound(player.getLocation(), Sound.BLOCK_ENCHANTMENT_TABLE_USE, 1.0f, 1.2f);
 
         // Set the number of active shields for this player
-        activeShields.put(player.getUniqueId(), numberOfShields);
+        activeShields.put(player.getUniqueId(), adjustedShields);
         playersWithShield.add(player.getUniqueId());
-
-        // (Initial particle effect removed for clarity)
 
         // Start shield orbiting effect
         new BukkitRunnable() {
@@ -84,7 +91,7 @@ public class WardingSigilAbility implements Ability {
 
             @Override
             public void run() {
-                if (!player.isOnline() || ticks++ >= shieldDuration ||
+                if (!player.isOnline() || ticks++ >= adjustedDuration ||
                         !playersWithShield.contains(player.getUniqueId())) {
                     // Cleanup
                     if (player.isOnline() && playersWithShield.contains(player.getUniqueId())) {
@@ -98,7 +105,7 @@ public class WardingSigilAbility implements Ability {
                 }
 
                 // Display remaining duration on action bar
-                int remainingSeconds = (shieldDuration - ticks) / 20;
+                int remainingSeconds = (adjustedDuration - ticks) / 20;
                 player.spigot().sendMessage(
                         net.md_5.bungee.api.ChatMessageType.ACTION_BAR,
                         new net.md_5.bungee.api.chat.TextComponent(
@@ -159,6 +166,10 @@ public class WardingSigilAbility implements Ability {
                             1, 0, 0, 0, 0,
                             new Particle.DustOptions(Color.fromRGB(255, 230, 100), 0.7f)
                     );
+                }
+                
+                if (sl.getLevel() >= 3) {
+                    center.getWorld().spawnParticle(Particle.CRIT, center, 2, 0.1, 0.1, 0.1, 0.05);
                 }
             }
 

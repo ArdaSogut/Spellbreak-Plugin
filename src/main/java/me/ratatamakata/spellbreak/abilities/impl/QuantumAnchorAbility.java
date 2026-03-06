@@ -6,6 +6,7 @@ import net.md_5.bungee.api.ChatMessageType;
 import net.md_5.bungee.api.chat.TextComponent;
 import org.bukkit.*;
 import org.bukkit.configuration.file.FileConfiguration;
+import me.ratatamakata.spellbreak.level.SpellLevel;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
@@ -47,16 +48,21 @@ public class QuantumAnchorAbility implements Ability {
             return;
         }
 
+        SpellLevel sl = Spellbreak.getInstance().getLevelManager()
+                .getSpellLevel(player.getUniqueId(), Spellbreak.getInstance().getPlayerDataManager().getPlayerClass(player.getUniqueId()), getName());
+
         // Record player state
         AnchorRecord record = new AnchorRecord(
-                player.getLocation().clone()
+                player.getLocation().clone(), sl
         );
+
+        int scaledDuration = (int) (duration * sl.getDurationMultiplier());
 
         // Apply absorption effect (level 1 = 2 hearts, level 2 = 4 hearts, etc.)
         int absorptionLevel = (int) (absorptionHearts / 2) - 1; // 8.0 hearts = level 3 (which gives 4 hearts)
         player.addPotionEffect(new PotionEffect(
                 PotionEffectType.ABSORPTION,
-                duration * 20,
+                scaledDuration * 20,
                 absorptionLevel,
                 true,
                 true
@@ -64,7 +70,7 @@ public class QuantumAnchorAbility implements Ability {
 
         player.addPotionEffect(new PotionEffect(
                 PotionEffectType.SPEED,
-                duration * 20,
+                scaledDuration * 20,
                 speedAmplifier,
                 true,
                 true
@@ -74,7 +80,7 @@ public class QuantumAnchorAbility implements Ability {
         activeAnchors.put(player.getUniqueId(), record);
 
         // Start particle effects and action bar updates
-        startVisualEffects(player, record);
+        startVisualEffects(player, record, scaledDuration);
 
         // Schedule return
         BukkitTask returnTask = new BukkitRunnable() {
@@ -84,18 +90,18 @@ public class QuantumAnchorAbility implements Ability {
                     returnToAnchor(player, false);
                 }
             }
-        }.runTaskLater(Spellbreak.getInstance(), duration * 20);
+        }.runTaskLater(Spellbreak.getInstance(), scaledDuration * 20);
 
         record.setReturnTask(returnTask);
 
-        player.sendMessage(ChatColor.GREEN + "Quantum Anchor set! You'll return in " + duration + " seconds.");
+        player.sendMessage(ChatColor.GREEN + "Quantum Anchor set! You'll return in " + scaledDuration + " seconds.");
         player.playSound(player.getLocation(), Sound.BLOCK_BEACON_ACTIVATE, 1.0f, 1.5f);
     }
 
-    private void startVisualEffects(Player player, AnchorRecord record) {
+    private void startVisualEffects(Player player, AnchorRecord record, int scaledDuration) {
         // Action bar and particle task
         BukkitTask visualTask = new BukkitRunnable() {
-            private int ticksRemaining = duration * 20;
+            private int ticksRemaining = scaledDuration * 20;
 
             @Override
             public void run() {
@@ -114,7 +120,19 @@ public class QuantumAnchorAbility implements Ability {
                 player.spigot().sendMessage(ChatMessageType.ACTION_BAR, new TextComponent(actionBarText));
 
                 // Spawn particles at anchor location
-                spawnAnchorParticles(record.getLocation(), secondsRemaining, duration);
+                Location anchorLoc = record.getLocation();
+                spawnAnchorParticles(anchorLoc, secondsRemaining, scaledDuration, record.sl);
+
+                // L5: Anchor Stasis Field
+                if (record.sl.getLevel() >= 5) {
+                    if (ticksRemaining % 10 == 0) { // Every half second
+                        for (Entity e : anchorLoc.getWorld().getNearbyEntities(anchorLoc, 3.0, 3.0, 3.0)) {
+                            if (e instanceof LivingEntity && e != player) {
+                                ((LivingEntity) e).addPotionEffect(new PotionEffect(PotionEffectType.SLOWNESS, 20, 1));
+                            }
+                        }
+                    }
+                }
 
                 if (ticksRemaining <= 0) {
                     this.cancel();
@@ -125,7 +143,7 @@ public class QuantumAnchorAbility implements Ability {
         record.setVisualTask(visualTask);
     }
 
-    private void spawnAnchorParticles(Location anchorLoc, int secondsRemaining, int totalDuration) {
+    private void spawnAnchorParticles(Location anchorLoc, int secondsRemaining, int totalDuration, SpellLevel sl) {
         if (anchorLoc.getWorld() == null) return;
 
         // Calculate size based on remaining time
@@ -161,14 +179,23 @@ public class QuantumAnchorAbility implements Ability {
                     anchorLoc.getZ() + (Math.random() - 0.5) * currentRadius * 2,
                     3, 0.5, 0.5, 0.5, 0.1);
         }
+        
+        // L3: Quantum Shimmer
+        if (sl.getLevel() >= 3 && Math.random() < 0.2) {
+            world.spawnParticle(Particle.END_ROD,
+                    anchorLoc.getX() + (Math.random() - 0.5) * currentRadius * 2.5,
+                    anchorLoc.getY() + Math.random() * 2.5,
+                    anchorLoc.getZ() + (Math.random() - 0.5) * currentRadius * 2.5,
+                    1, 0, 0, 0, 0.05);
+        }
     }
 
-    private void spawnExplosionParticles(Location loc) {
+    private void spawnExplosionParticles(Location loc, float scaledRadius) {
         World world = loc.getWorld();
         if (world == null) return;
 
         int particles = 30;
-        double radius = explosionRadius;
+        double radius = scaledRadius;
 
         for (int i = 0; i < particles; i++) {
             double angle = (2 * Math.PI * i) / particles;
@@ -226,18 +253,21 @@ public class QuantumAnchorAbility implements Ability {
         player.spigot().sendMessage(ChatMessageType.ACTION_BAR, new TextComponent(""));
 
         if (earlyReturn) {
+            double scaledExplosionDamage = explosionDamage * record.sl.getDamageMultiplier();
+            float scaledExplosionRadius = (float) (explosionRadius * record.sl.getRangeMultiplier());
+
             // Create explosion at current location
             Location explosionLoc = player.getLocation();
             player.getWorld().spawnParticle(Particle.EXPLOSION, explosionLoc, 1);
-            spawnExplosionParticles(explosionLoc);
+            spawnExplosionParticles(explosionLoc, scaledExplosionRadius);
             player.getWorld().playSound(explosionLoc, Sound.ENTITY_GENERIC_EXPLODE, 1.0f, 1.0f);
 
             // Damage nearby entities
-            for (Entity e : player.getWorld().getNearbyEntities(explosionLoc, explosionRadius, explosionRadius, explosionRadius)) {
+            for (Entity e : player.getWorld().getNearbyEntities(explosionLoc, scaledExplosionRadius, scaledExplosionRadius, scaledExplosionRadius)) {
                 if (e instanceof LivingEntity && e != player) {
                     Spellbreak.getInstance().getAbilityDamage().damage(
                             (LivingEntity) e,
-                            explosionDamage,
+                            scaledExplosionDamage,
                             player,
                             this,
                             "QuantumAnchor"
@@ -301,9 +331,11 @@ public class QuantumAnchorAbility implements Ability {
         private final Location location;
         private BukkitTask returnTask;
         private BukkitTask visualTask;
+        private final SpellLevel sl;
 
-        public AnchorRecord(Location location) {
+        public AnchorRecord(Location location, SpellLevel sl) {
             this.location = location;
+            this.sl = sl;
         }
 
         public Location getLocation() { return location; }

@@ -64,6 +64,8 @@ public class CloneSwarmAbility implements Ability {
         int adjustedCooldown = (int) (cooldown * spellLevel.getCooldownReduction());
         int adjustedManaCost = (int) (manaCost * spellLevel.getManaCostReduction());
         int adjustedCloneCount = cloneCount + spellLevel.getLevel(); // Increase clone count based on level
+        double adjustedCollisionDamage = cloneCollisionDamage * spellLevel.getDamageMultiplier();
+        double adjustedSpawnRadius = spawnRadius * spellLevel.getRangeMultiplier();
 
         if (playerClones.containsKey(player.getUniqueId())) {
             clearClones(player, false);
@@ -82,10 +84,10 @@ public class CloneSwarmAbility implements Ability {
         Location origin = player.getLocation();
         for (int i = 0; i < adjustedCloneCount; i++) {
             double angle = 2 * Math.PI * i / adjustedCloneCount;
-            double xOff = Math.cos(angle) * spawnRadius;
-            double zOff = Math.sin(angle) * spawnRadius;
+            double xOff = Math.cos(angle) * adjustedSpawnRadius;
+            double zOff = Math.sin(angle) * adjustedSpawnRadius;
             Location spawnLoc = origin.clone().add(xOff, 0.5, zOff);
-            CloneData clone = createCloneAt(player, target, spawnLoc);
+            CloneData clone = createCloneAt(player, target, spawnLoc, spellLevel, adjustedCollisionDamage);
             if (clone != null) clones.add(clone);
         }
 
@@ -116,7 +118,7 @@ public class CloneSwarmAbility implements Ability {
         }.runTaskLater(Spellbreak.getInstance(), cloneDuration);
     }
 
-    private CloneData createCloneAt(Player player, LivingEntity target, Location spawnLoc) {
+    private CloneData createCloneAt(Player player, LivingEntity target, Location spawnLoc, SpellLevel sl, double damage) {
         ArmorStand stand = (ArmorStand) spawnLoc.getWorld().spawnEntity(spawnLoc, EntityType.ARMOR_STAND);
         stand.setGravity(true);
         stand.setVisible(true);
@@ -141,7 +143,15 @@ public class CloneSwarmAbility implements Ability {
                 if (--ticksToJump<=0) { dir.setY(cloneJumpForce); ticksToJump = (int)(Math.random()*20)+10; }
                 stand.setVelocity(dir.multiply(cloneMoveSpeed));
                 spawnTinyParticles(stand.getLocation());
-                if (stand.getLocation().distance(target.getLocation())<cloneCollisionRadius) handleCloneCollision(stand, target, player);
+                
+                // Level 3+: extra PORTAL trail
+                if (sl.getLevel() >= 3) {
+                    stand.getWorld().spawnParticle(Particle.PORTAL, stand.getLocation().add(0, 1, 0), 2, 0.2, 0.2, 0.2, 0);
+                }
+                
+                if (stand.getLocation().distance(target.getLocation())<cloneCollisionRadius) {
+                    handleCloneCollision(stand, target, player, sl, damage);
+                }
             }
         }.runTaskTimer(Spellbreak.getInstance(),5,2);
 
@@ -245,7 +255,8 @@ public class CloneSwarmAbility implements Ability {
 
                 // Check for collision with target
                 if (stand.getLocation().distance(target.getLocation()) < cloneCollisionRadius) {
-                    handleCloneCollision(stand, target, player);
+                    SpellLevel sl = Spellbreak.getInstance().getLevelManager().getSpellLevel(player.getUniqueId(), Spellbreak.getInstance().getPlayerDataManager().getPlayerClass(player.getUniqueId()), "CloneSwarm");
+                    handleCloneCollision(stand, target, player, sl, cloneCollisionDamage * sl.getDamageMultiplier());
                 }
             }
         }.runTaskTimer(Spellbreak.getInstance(), 5L, 2L);
@@ -253,9 +264,9 @@ public class CloneSwarmAbility implements Ability {
         return new CloneData(stand, moveTask);
     }
 
-    private void handleCloneCollision(ArmorStand clone, LivingEntity target, Player owner) {
+    private void handleCloneCollision(ArmorStand clone, LivingEntity target, Player owner, SpellLevel sl, double damage) {
         // Apply damage and knockback effect
-        Spellbreak.getInstance().getAbilityDamage().damage(target, cloneCollisionDamage, owner, this, null);
+        Spellbreak.getInstance().getAbilityDamage().damage(target, damage, owner, this, null);
 
         // Apply small knockback
         Vector knock = target.getLocation().toVector().subtract(clone.getLocation().toVector()).normalize().multiply(0.3);
@@ -265,6 +276,12 @@ public class CloneSwarmAbility implements Ability {
         // Visual and sound effects
         clone.getWorld().playSound(clone.getLocation(), Sound.ENTITY_PLAYER_ATTACK_SWEEP, 0.5f, 1.5f);
         spawnHitParticles(clone.getLocation());
+        
+        // Level 5+: apply SLOWNESS and NAUSEA on collision
+        if (sl.getLevel() >= 5) {
+            target.addPotionEffect(new org.bukkit.potion.PotionEffect(org.bukkit.potion.PotionEffectType.SLOWNESS, 40, 1));
+            target.addPotionEffect(new org.bukkit.potion.PotionEffect(org.bukkit.potion.PotionEffectType.NAUSEA, 60, 0));
+        }
 
         // Remove the clone
         DisguiseAPI.undisguiseToAll(clone);

@@ -5,6 +5,7 @@ import me.ratatamakata.spellbreak.abilities.Ability;
 import org.bukkit.*;
 import org.bukkit.block.Block;
 import org.bukkit.configuration.file.FileConfiguration;
+import me.ratatamakata.spellbreak.level.SpellLevel;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
@@ -60,8 +61,11 @@ public class BlackHoleAbility implements Ability {
         // Get ground position below player
         Location groundLoc = findGroundLocation(player.getLocation());
         Vector dir = player.getLocation().getDirection().setY(0).normalize();
+        
+        SpellLevel sl = Spellbreak.getInstance().getLevelManager()
+                .getSpellLevel(uuid, Spellbreak.getInstance().getPlayerDataManager().getPlayerClass(uuid), getName());
 
-        TravelingHole hole = new TravelingHole(player.getWorld(), groundLoc, dir, uuid);
+        TravelingHole hole = new TravelingHole(player.getWorld(), groundLoc, dir, uuid, sl);
         hole.runTaskTimer(Spellbreak.getInstance(), 0, 1);
         activeHoles.put(uuid, hole);
 
@@ -123,17 +127,24 @@ public class BlackHoleAbility implements Ability {
         private Location loc;
         private final Vector dir;
         private final UUID owner;
+        private final SpellLevel sl;
+        private final double adjustedMaxRadius;
+        private final int adjustedAnchorDuration;
+        
         private double traveled = 0;
         private double radius = 1.0;
         private int tickCount = 0;
         private boolean anchored = false;
         private double speed = initialSpeed;
 
-        TravelingHole(World w, Location start, Vector direction, UUID owner) {
+        TravelingHole(World w, Location start, Vector direction, UUID owner, SpellLevel sl) {
             this.world = w;
             this.loc = start.clone();
             this.dir = direction.clone();
             this.owner = owner;
+            this.sl = sl;
+            this.adjustedMaxRadius = maxRadius * sl.getRangeMultiplier();
+            this.adjustedAnchorDuration = (int) (anchorDuration * sl.getDurationMultiplier());
         }
 
         @Override
@@ -150,7 +161,7 @@ public class BlackHoleAbility implements Ability {
             // Move and grow
             loc.add(dir.clone().multiply(speed));
             traveled += speed;
-            radius = Math.min(maxRadius, radius + growthRate);
+            radius = Math.min(adjustedMaxRadius, radius + growthRate);
 
             // Create 3D sphere effect with multi-axis rings
             createMultiAxisSphere();
@@ -170,20 +181,23 @@ public class BlackHoleAbility implements Ability {
         private void createMultiAxisSphere() {
             double rotationSpeed = 3.0;
             double globalAngle = Math.toRadians(tickCount * rotationSpeed);
+            
+            int pts25 = sl.getLevel() >= 3 ? 37 : 25;
+            int pts20 = sl.getLevel() >= 3 ? 30 : 20;
 
             // XY Plane Ring (Vertical)
-            createRing(0, globalAngle, radius, 25, 0.7f);
+            createRing(0, globalAngle, radius, pts25, 0.7f);
 
             // XZ Plane Ring (Horizontal)
-            createRing(1, globalAngle, radius, 25, 0.7f);
+            createRing(1, globalAngle, radius, pts25, 0.7f);
 
             // YZ Plane Ring (Vertical)
-            createRing(2, globalAngle, radius, 25, 0.7f);
+            createRing(2, globalAngle, radius, pts25, 0.7f);
 
             // Additional rings at 45-degree angles
             double offsetAngle = Math.PI/4;
-            createTiltedRing(globalAngle + offsetAngle, radius, 20, 0.6f);
-            createTiltedRing(globalAngle - offsetAngle, radius, 20, 0.6f);
+            createTiltedRing(globalAngle + offsetAngle, radius, pts20, 0.6f);
+            createTiltedRing(globalAngle - offsetAngle, radius, pts20, 0.6f);
 
             // Dark core particles
             world.spawnParticle(Particle.LARGE_SMOKE, loc, 8, 0.15, 0.15, 0.15, 0.05);
@@ -261,7 +275,7 @@ public class BlackHoleAbility implements Ability {
         }
 
         private void createAccretionDisk() {
-            int diskPoints = 40;
+            int diskPoints = sl.getLevel() >= 3 ? 60 : 40;
             double diskThickness = 0.6;
 
             for (int i = 0; i < diskPoints; i++) {
@@ -300,11 +314,15 @@ public class BlackHoleAbility implements Ability {
 
             // Play anchoring sound
             anchorLoc.getWorld().playSound(anchorLoc, Sound.BLOCK_BEACON_ACTIVATE, 1.5f, 0.7f);
+            
+            if (sl.getLevel() >= 5) { // L5: SONIC_BOOM on anchor
+                anchorLoc.getWorld().spawnParticle(Particle.SONIC_BOOM, anchorLoc, 1);
+            }
 
             new BukkitRunnable() {
                 int tick = 0;
                 @Override public void run() {
-                    if (tick++ >= anchorDuration) {
+                    if (tick++ >= adjustedAnchorDuration) {
                         this.cancel();
                         activeHoles.remove(owner);
                         return;
@@ -327,20 +345,23 @@ public class BlackHoleAbility implements Ability {
         private void createAnchoredSphere(Location center, double radius, int time) {
             double rotationSpeed = 8.0;
             double globalAngle = Math.toRadians(time * rotationSpeed);
+            
+            int pts30 = sl.getLevel() >= 3 ? 45 : 30;
+            int pts25 = sl.getLevel() >= 3 ? 37 : 25;
 
             // XY Plane Ring (Vertical)
-            createRing(center, 0, globalAngle, radius, 30, 0.8f);
+            createRing(center, 0, globalAngle, radius, pts30, 0.8f);
 
             // XZ Plane Ring (Horizontal)
-            createRing(center, 1, globalAngle, radius, 30, 0.8f);
+            createRing(center, 1, globalAngle, radius, pts30, 0.8f);
 
             // YZ Plane Ring (Vertical)
-            createRing(center, 2, globalAngle, radius, 30, 0.8f);
+            createRing(center, 2, globalAngle, radius, pts30, 0.8f);
 
             // Additional rings at 45-degree angles
             double offsetAngle = Math.PI/3;
-            createTiltedRing(center, globalAngle + offsetAngle, radius, 25, 0.75f);
-            createTiltedRing(center, globalAngle - offsetAngle, radius, 25, 0.75f);
+            createTiltedRing(center, globalAngle + offsetAngle, radius, pts25, 0.75f);
+            createTiltedRing(center, globalAngle - offsetAngle, radius, pts25, 0.75f);
 
             // Equatorial ring
             createEquatorialRing(center, radius, time);
@@ -421,7 +442,7 @@ public class BlackHoleAbility implements Ability {
         }
 
         private void createEquatorialRing(Location center, double radius, int time) {
-            int points = 50;
+            int points = sl.getLevel() >= 3 ? 75 : 50;
             double rotationSpeed = 5.0;
             double angle = Math.toRadians(time * rotationSpeed);
 

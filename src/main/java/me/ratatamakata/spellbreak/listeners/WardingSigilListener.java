@@ -3,6 +3,7 @@ package me.ratatamakata.spellbreak.listeners;
 import me.ratatamakata.spellbreak.Spellbreak;
 import me.ratatamakata.spellbreak.abilities.impl.WardingSigilAbility;
 import me.ratatamakata.spellbreak.managers.*;
+import me.ratatamakata.spellbreak.level.SpellLevel;
 import org.bukkit.*;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
@@ -204,6 +205,15 @@ public class WardingSigilListener implements Listener {
 
         // Block the damage and consume a shield
         if (WardingSigilAbility.consumeShield(p)) {
+            SpellLevel sl = plugin.getLevelManager().getSpellLevel(p.getUniqueId(), pdm.getPlayerClass(p.getUniqueId()), "WardingSigil");
+            if (sl.getLevel() >= 5 && e instanceof org.bukkit.event.entity.EntityDamageByEntityEvent) {
+                org.bukkit.entity.Entity damager = ((org.bukkit.event.entity.EntityDamageByEntityEvent) e).getDamager();
+                if (damager instanceof org.bukkit.entity.LivingEntity && !damager.equals(p)) {
+                    double reflectAmount = e.getDamage() * 0.5; // Reflect 50%
+                    plugin.getAbilityDamage().damage((org.bukkit.entity.LivingEntity) damager, reflectAmount, p, ability, "Warding Sigil Reflect");
+                    p.getWorld().spawnParticle(Particle.SWEEP_ATTACK, damager.getLocation().add(0, 1, 0), 1, 0, 0, 0, 0);
+                }
+            }
             e.setCancelled(true);
         }
     }

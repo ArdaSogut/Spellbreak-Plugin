@@ -152,8 +152,8 @@ public class AvalancheAbility implements Ability {
                 player.setWalkSpeed((float)Math.min(0.7, 0.2 * data.currentSpeed));
 
                 createSnowSphere(player, data.currentRadius);
-                createFrontTrail(player);
-                handleCollisions(player, data);
+                createFrontTrail(player, lvl);
+                handleCollisions(player, data, lvl);
             }
         }.runTaskTimer(Spellbreak.getInstance(), 0, 1);
 
@@ -174,14 +174,18 @@ public class AvalancheAbility implements Ability {
         }
     }
 
-    private void createFrontTrail(Player player) {
+    private void createFrontTrail(Player player, SpellLevel lvl) {
         World w = player.getWorld();
         Location f = player.getLocation().add(0, 1, 0)
                 .add(player.getLocation().getDirection().normalize().multiply(1.5));
         w.spawnParticle(Particle.SNOWFLAKE, f, 2, 0.2, 0.2, 0.2, 0.01);
+        
+        if (lvl.getLevel() >= 3) {
+            w.spawnParticle(Particle.CLOUD, f, 1, 0.3, 0.3, 0.3, 0.02);
+        }
     }
 
-    private void handleCollisions(Player player, AvalancheData data) {
+    private void handleCollisions(Player player, AvalancheData data, SpellLevel lvl) {
         if (data.currentRadius < adjustedBaseRadius + 0.3) return;
         World w = player.getWorld();
         double r = data.currentRadius * 0.9;
@@ -195,6 +199,11 @@ public class AvalancheAbility implements Ability {
             e.setVelocity(knock);
             Spellbreak.getInstance().getAbilityDamage()
                     .damage((LivingEntity)e, adjustedDamage, player, this, "Avalanche");
+                    
+            if (lvl.getLevel() >= 5) {
+                ((LivingEntity)e).addPotionEffect(new org.bukkit.potion.PotionEffect(org.bukkit.potion.PotionEffectType.SLOWNESS, 40, 2));
+            }
+
             w.spawnParticle(Particle.BLOCK_CRUMBLE, e.getLocation(), 20,
                     Material.ICE.createBlockData());
             w.playSound(e.getLocation(), Sound.BLOCK_GLASS_BREAK, 1f, 0.8f);

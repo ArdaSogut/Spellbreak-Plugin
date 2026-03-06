@@ -82,6 +82,7 @@ public class DreamwalkerAbility implements Ability {
 
         SpellLevel spellLevel = Spellbreak.getInstance().getLevelManager().getSpellLevel(player.getUniqueId(), Spellbreak.getInstance().getPlayerDataManager().getPlayerClass(player.getUniqueId()), "Dreamwalker");
         int adjustedDurationTicks = durationTicks + (spellLevel.getLevel() * 5); // Increase duration based on level
+        double scaledDamage = damage * spellLevel.getDamageMultiplier();
 
         BukkitRunnable task = new BukkitRunnable() {
             int ticks = 0;
@@ -116,6 +117,11 @@ public class DreamwalkerAbility implements Ability {
                         25, 0.5, 0.5, 0.5, 0.15,
                         new Particle.DustOptions(org.bukkit.Color.fromRGB(255, 182, 193), 1.0f));
 
+                // Level 3+: Extra portal particles while phasing
+                if (spellLevel.getLevel() >= 3) {
+                    player.getWorld().spawnParticle(Particle.PORTAL, player.getLocation().add(0, 1, 0), 5, 0.4, 0.4, 0.4, 0.05);
+                }
+
                 Set<UUID> affected = affectedTargets.get(player.getUniqueId());
                 for (Entity entity : player.getNearbyEntities(1.5, 1.5, 1.5)) {
                     if (entity instanceof LivingEntity target && !target.equals(player)) {
@@ -132,11 +138,16 @@ public class DreamwalkerAbility implements Ability {
                             player.setMetadata("DREAMWALKER_DAMAGE", new FixedMetadataValue(Spellbreak.getInstance(), true));
                             Spellbreak.getInstance().getAbilityDamage().damage(
                                     target,
-                                    damage,
+                                    scaledDamage,
                                     player,
                                     DreamwalkerAbility.this,
                                     "phase_damage"
                             );
+                            
+                            // Level 5+: Inflict WITHER
+                            if (spellLevel.getLevel() >= 5) {
+                                target.addPotionEffect(new PotionEffect(PotionEffectType.WITHER, 60, 0));
+                            }
                             new BukkitRunnable() {
                                 @Override
                                 public void run() {

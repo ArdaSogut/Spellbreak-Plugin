@@ -431,9 +431,13 @@ public class EarthShardsAbility implements Ability {
                     Location hitLoc = target.getLocation();
                     target.getWorld().spawnParticle(
                             Particle.BLOCK_CRUMBLE,
-                            hitLoc, 10, 0.3, 0.3, 0.3, 0,
+                            hitLoc, lvl.getLevel() >= 3 ? 30 : 10, 0.4, 0.4, 0.4, 0,
                             shard.material.createBlockData()
                     );
+                    
+                    if (lvl.getLevel() >= 5) {
+                        target.addPotionEffect(new org.bukkit.potion.PotionEffect(org.bukkit.potion.PotionEffectType.SLOWNESS, 40, 3));
+                    }
                     target.getWorld().playSound(hitLoc, Sound.ENTITY_PLAYER_HURT, 0.8f, 1.2f);
 
                     if (shard.fallingBlock.isValid()) {

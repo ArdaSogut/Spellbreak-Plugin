@@ -12,6 +12,7 @@ import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.Color;
 import org.bukkit.Location;
+import me.ratatamakata.spellbreak.level.SpellLevel;
 import org.bukkit.Material;
 import org.bukkit.Particle;
 import org.bukkit.Sound;
@@ -292,7 +293,7 @@ public class ThunderSlamAbility implements Ability {
                         player.teleport(slamLocation);
                     }
 
-                    ThunderSlamAbility.this.doSlamEffects(slamLocation);
+                    ThunderSlamAbility.this.doSlamEffects(slamLocation, player);
                     ThunderSlamAbility.this.applyDamageAndKnockback(player, slamLocation);
                     this.cancel();
                 }
@@ -319,28 +320,53 @@ public class ThunderSlamAbility implements Ability {
     }
 
 
-    private void doSlamEffects(Location slamLocation) {
+    private void doSlamEffects(Location slamLocation, Player player) {
         World world = slamLocation.getWorld();
-        world.spawnParticle(Particle.DUST, slamLocation, 150, this.radius, 0.1D, this.radius, 0.2D, this.chargeParticles);
-        world.spawnParticle(Particle.DUST, slamLocation, 100, this.radius / 2.0D, 0.1D, this.radius / 2.0D, 0.1D, this.darkChargeParticles);
+        SpellLevel lvl = Spellbreak.getInstance().getLevelManager().getSpellLevel(
+                player.getUniqueId(),
+                Spellbreak.getInstance().getPlayerDataManager().getPlayerClass(player.getUniqueId()),
+                getName()
+        );
+        double adjustedRadius = this.radius * lvl.getRangeMultiplier();
+        
+        world.spawnParticle(Particle.DUST, slamLocation, 150, adjustedRadius, 0.1D, adjustedRadius, 0.2D, this.chargeParticles);
+        world.spawnParticle(Particle.DUST, slamLocation, 100, adjustedRadius / 2.0D, 0.1D, adjustedRadius / 2.0D, 0.1D, this.darkChargeParticles);
         world.strikeLightningEffect(slamLocation);
         world.spawnParticle(Particle.FIREWORK, slamLocation, 100, 0.0D, 0.0D, 0.0D, 0.5D);
         world.spawnParticle(Particle.EXPLOSION, slamLocation, 1);
+        
+        if (lvl.getLevel() >= 3) {
+            world.spawnParticle(Particle.FLASH, slamLocation, 1);
+        }
+
         world.playSound(slamLocation, Sound.ENTITY_LIGHTNING_BOLT_IMPACT, 2.0F, 0.7F);
         world.playSound(slamLocation, Sound.ENTITY_GENERIC_EXPLODE, 1.5F, 0.5F);
     }
 
     private void applyDamageAndKnockback(Player player, Location slamLocation) {
         World world = slamLocation.getWorld();
-        double r2 = this.radius * this.radius;
-        Iterator var6 = world.getNearbyEntities(slamLocation, this.radius, this.radius, this.radius).iterator();
+        SpellLevel lvl = Spellbreak.getInstance().getLevelManager().getSpellLevel(
+                player.getUniqueId(),
+                Spellbreak.getInstance().getPlayerDataManager().getPlayerClass(player.getUniqueId()),
+                getName()
+        );
+        double adjustedRadius = this.radius * lvl.getRangeMultiplier();
+        double adjustedDamage = this.damage * lvl.getDamageMultiplier();
+        
+        double r2 = adjustedRadius * adjustedRadius;
+        Iterator var6 = world.getNearbyEntities(slamLocation, adjustedRadius, adjustedRadius, adjustedRadius).iterator();
 
         while(var6.hasNext()) {
             Entity e = (Entity)var6.next();
             if (e instanceof LivingEntity && !e.equals(player)) {
                 LivingEntity target = (LivingEntity)e;
                 if (!(target.getLocation().distanceSquared(slamLocation) > r2)) {
-                    Spellbreak.getInstance().getAbilityDamage().damage(target, this.damage, player, this, "Slam");
+                    Spellbreak.getInstance().getAbilityDamage().damage(target, adjustedDamage, player, this, "Slam");
+                    
+                    if (lvl.getLevel() >= 5) {
+                        target.addPotionEffect(new org.bukkit.potion.PotionEffect(org.bukkit.potion.PotionEffectType.BLINDNESS, 60, 0));
+                    }
+                    
                     Vector direction = target.getLocation().toVector().subtract(slamLocation.toVector());
                     if (direction.lengthSquared() > 0.0D) {
                         direction.normalize();

@@ -55,10 +55,11 @@ public class NeuralTrapAbility implements Ability {
     public void activate(Player player) {
         success = false;
 
-        SpellLevel spellLevel = Spellbreak.getInstance().getLevelManager().getSpellLevel(player.getUniqueId(), getName(), "NeuralTrap");
+        SpellLevel spellLevel = Spellbreak.getInstance().getLevelManager().getSpellLevel(player.getUniqueId(), Spellbreak.getInstance().getPlayerDataManager().getPlayerClass(player.getUniqueId()), "NeuralTrap");
         int adjustedCooldown = (int) (cooldown * spellLevel.getCooldownReduction());
         int adjustedManaCost = (int) (manaCost * spellLevel.getManaCostReduction());
-        double adjustedDamagePerThreshold = damagePerThreshold + (spellLevel.getLevel() * 0.5); // Increase damage based on level
+        double adjustedDamagePerThreshold = damagePerThreshold * spellLevel.getDamageMultiplier();
+        double adjustedMaxDamage = maxTotalDamage * spellLevel.getDamageMultiplier();
 
         // Check if the player has enough mana
         if (!Spellbreak.getInstance().getManaSystem().consumeMana(player, adjustedManaCost)) {
@@ -84,7 +85,7 @@ public class NeuralTrapAbility implements Ability {
         spawnParticles(player.getLocation(), target.getLocation(), player.getWorld());
 
         // Start the trap effect with adjusted damage
-        startNeuralTrapEffect(player, target, adjustedDamagePerThreshold);
+        startNeuralTrapEffect(player, target, adjustedDamagePerThreshold, adjustedMaxDamage, spellLevel);
 
         success = true;
     }
@@ -139,8 +140,7 @@ public class NeuralTrapAbility implements Ability {
         }.runTaskTimer(Spellbreak.getInstance(), 0L, 1L);
     }
 
-    private void startNeuralTrapEffect(Player caster, LivingEntity target, double adjustedDamagePerThreshold) {
-        SpellLevel spellLevel = Spellbreak.getInstance().getLevelManager().getSpellLevel(caster.getUniqueId(), Spellbreak.getInstance().getPlayerDataManager().getPlayerClass(caster.getUniqueId()), "NeuralTrap");
+    private void startNeuralTrapEffect(Player caster, LivingEntity target, double adjustedDamagePerThreshold, double adjustedMaxDamage, SpellLevel spellLevel) {
         int adjustedDurationTicks = durationTicks + (spellLevel.getLevel() * 5);
         // Removed damageDone map - not needed for single-target tracking
 
@@ -170,8 +170,8 @@ public class NeuralTrapAbility implements Ability {
                     double damageThisTick = hits * adjustedDamagePerThreshold;
 
                     // Enforce max total damage cap
-                    if (totalDamageDone + damageThisTick > maxTotalDamage) {
-                        damageThisTick = maxTotalDamage - totalDamageDone;
+                    if (totalDamageDone + damageThisTick > adjustedMaxDamage) {
+                        damageThisTick = adjustedMaxDamage - totalDamageDone;
                     }
 
                     // Apply damage if we haven't reached the cap
@@ -196,12 +196,20 @@ public class NeuralTrapAbility implements Ability {
                                 0.3, 0.3, 0.3,
                                 new Particle.DustOptions(Color.fromRGB(255, 182, 193), 1.5f)
                         );
+                        // Level 3+: PORTAL particles
+                        if (spellLevel.getLevel() >= 3) {
+                            target.getWorld().spawnParticle(Particle.PORTAL, target.getLocation().add(0, 1, 0), 15, 0.3, 0.3, 0.3, 0.05);
+                        }
+                        // Level 5+: SLOWNESS on movement damage
+                        if (spellLevel.getLevel() >= 5) {
+                            target.addPotionEffect(new org.bukkit.potion.PotionEffect(org.bukkit.potion.PotionEffectType.SLOWNESS, 40, 1));
+                        }
                     }
 
                     movedDistance -= hits * blocksPerThreshold;
 
                     // Cancel if we reached damage cap
-                    if (totalDamageDone >= maxTotalDamage) {
+                    if (totalDamageDone >= adjustedMaxDamage) {
                         if (target instanceof Player) {
                             ((Player) target).sendActionBar("");
                         }

@@ -99,6 +99,12 @@ public class EmberstormAbility implements Ability {
         World world = player.getWorld();
         world.playSound(player.getLocation(), Sound.ITEM_FIRECHARGE_USE, 1.5f, 0.8f);
 
+        SpellLevel sl = Spellbreak.getInstance().getLevelManager().getSpellLevel(
+            player.getUniqueId(),
+            Spellbreak.getInstance().getPlayerDataManager().getPlayerClass(player.getUniqueId()),
+            getName()
+        );
+
         // Seviye bazlı değerler
         double adjustedRadius = getAdjustedRadius(player);
         double adjustedDamage = getAdjustedDamage(player);
@@ -148,10 +154,10 @@ public class EmberstormAbility implements Ability {
 
                 // Update and spawn particle effects
                 updateEffectPatterns();
-                spawnEffectParticles(player.getLocation(), adjustedRadius);
+                spawnEffectParticles(player.getLocation(), adjustedRadius, sl);
 
                 // Damage logic
-                affectEntities(player, adjustedRadius, adjustedDamage);
+                affectEntities(player, adjustedRadius, adjustedDamage, sl);
             }
 
             private void initializeEffectPatterns() {
@@ -240,7 +246,7 @@ public class EmberstormAbility implements Ability {
                 return new Vector(x, y, z);
             }
 
-            private void spawnEffectParticles(Location center, double radius) {
+            private void spawnEffectParticles(Location center, double radius, SpellLevel sl) {
                 // 1. Main rotating fire spirals
                 for (int arm = 0; arm < 4; arm++) {
                     double baseAngle = spiralAngles.get(arm % spiralAngles.size());
@@ -303,7 +309,7 @@ public class EmberstormAbility implements Ability {
                 }
 
                 // 4. Occasional fire bursts
-                if (rand.nextInt(8) == 0) {
+                if (rand.nextInt(sl.getLevel() >= 3 ? 4 : 8) == 0) {
                     double burstAngle = rand.nextDouble() * Math.PI * 2;
                     double burstDistance = rand.nextDouble() * radius * 0.8;
                     double burstX = Math.cos(burstAngle) * burstDistance;
@@ -349,7 +355,7 @@ public class EmberstormAbility implements Ability {
                 }
             }
 
-            private void affectEntities(Player caster, double radius, double damage) {
+            private void affectEntities(Player caster, double radius, double damage, SpellLevel sl) {
                 Ability thisAbility = Spellbreak.getInstance().getAbilityManager().getAbilityByName("Emberstorm");
 
                 for (LivingEntity entity : caster.getWorld().getEntitiesByClass(LivingEntity.class)) {
@@ -369,6 +375,12 @@ public class EmberstormAbility implements Ability {
                                 entity, damage, caster, thisAbility, "Emberstorm"
                         );
                         entity.setFireTicks(burnDuration);
+                        
+                        // Level 5+: Explosion Burst
+                        if (sl.getLevel() >= 5) {
+                            entity.getWorld().spawnParticle(Particle.EXPLOSION, entity.getLocation().add(0, 1, 0), 1);
+                        }
+
                         entity.getWorld().playSound(
                                 entity.getLocation(),
                                 Sound.ENTITY_GENERIC_BURN,
