@@ -4,7 +4,7 @@ A fully custom Minecraft ability system built for **Paper 1.21+**, featuring 6 u
 
 ## Features
 
-- **6 Spell Classes** – each with 6 unique abilities
+- **7 Spell Classes** – each with 6 unique abilities
 - **47 Custom Abilities** – with cooldowns, mana costs, particle effects, and configurable stats
 - **Mana System** – per-player mana pool with regeneration
 - **Player & Spell Level System** – gain XP and level up to unlock stat bonuses
