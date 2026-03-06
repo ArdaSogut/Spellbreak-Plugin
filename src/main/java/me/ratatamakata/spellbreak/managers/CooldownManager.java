@@ -1,6 +1,7 @@
 package me.ratatamakata.spellbreak.managers;
 
 import me.ratatamakata.spellbreak.Spellbreak;
+import me.ratatamakata.spellbreak.level.SpellLevel;
 import org.bukkit.entity.Player;
 import java.util.HashMap;
 import java.util.Map;
@@ -15,7 +16,20 @@ public class CooldownManager {
     public void setCooldown(Player player, String abilityName, int seconds) {
         UUID uuid = player.getUniqueId();
         cooldowns.putIfAbsent(uuid, new HashMap<>());
-        long expireTime = System.currentTimeMillis() + (seconds * 1000L);
+
+        // Apply SpellLevel cooldown reduction automatically
+        double reduction = 1.0;
+        try {
+            String playerClass = Spellbreak.getInstance().getPlayerDataManager().getPlayerClass(uuid);
+            SpellLevel sl = Spellbreak.getInstance().getLevelManager()
+                    .getSpellLevel(uuid, playerClass, abilityName);
+            reduction = sl.getCooldownReduction();
+        } catch (Exception ignored) {
+            // Safety: if level system fails for any reason, use base cooldown
+        }
+
+        long reducedMillis = (long)(seconds * 1000L * reduction);
+        long expireTime = System.currentTimeMillis() + reducedMillis;
         cooldowns.get(uuid).put(abilityName.toLowerCase(), expireTime);
     }
 
