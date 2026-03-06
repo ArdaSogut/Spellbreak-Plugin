@@ -95,7 +95,8 @@ public final class Spellbreak extends JavaPlugin implements Listener {
         getServer().getPluginManager().registerEvents(new HealingListener(), this);
         getServer().getPluginManager().registerEvents(stunHandler, this);
         getServer().getPluginManager().registerEvents(new BoneChoirListener(), this);
-        // Note: CustomDeathMessageListener is registered inside setupDamageTracking(), not here
+        // Note: CustomDeathMessageListener is registered here
+        getServer().getPluginManager().registerEvents(new CustomDeathMessageListener(this), this);
         getServer().getPluginManager().registerEvents(new NatureStepListener(), this);
         getServer().getPluginManager().registerEvents(new FallDamageListener(), this);
         getServer().getPluginManager().registerEvents(new AmbushSlashListener(this), this);
@@ -166,8 +167,6 @@ public final class Spellbreak extends JavaPlugin implements Listener {
             }
         }.runTaskTimer(this, 0L, 2L); // Update scoreboard every 2 ticks for responsiveness
 
-        // Commented out Action Bar HUD Updater
-        // new AbilityHUDUpdater().runTaskTimer(this, 0L, 2L);
         manaSystem.startRegenerationTask();
 
         getLogger().info("Spellbreak v1.0 enabled!");
@@ -218,9 +217,6 @@ public final class Spellbreak extends JavaPlugin implements Listener {
 
         damageListener = new AbilityDamageListener(this, damageTracker);
         abilityDamage = new AbilityDamage(this, damageTracker, damageListener);
-
-        // Register death message listener (your existing one)
-        getServer().getPluginManager().registerEvents(new CustomDeathMessageListener(this), this);
 
         // Register ability damage listener
         getServer().getPluginManager().registerEvents(damageListener, this);

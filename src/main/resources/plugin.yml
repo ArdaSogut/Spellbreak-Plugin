@@ -11,9 +11,7 @@ commands:
   class:
     description: Set your spell class
     usage: /class <class>
-  cooldownreset:
-    description: Reset cooldowns for a player
-    usage: /cooldownreset [player]
+
   testdeath:
     description: Test death messages for abilities
     usage: /testdeath <ability> [target]

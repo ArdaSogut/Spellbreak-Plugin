@@ -168,5 +168,4 @@ Player data (class selection, bound abilities, levels) is stored per-player unde
 ## Notes
 
 - **Starcaller** is the newest class (added after initial release).
-- `UndyingRage` is an unfinished WIP ability and is not yet accessible in-game.
 - Daily Missions are work-in-progress and may have limited functionality.

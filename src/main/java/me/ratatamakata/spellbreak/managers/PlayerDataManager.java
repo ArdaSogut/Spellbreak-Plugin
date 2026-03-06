@@ -109,11 +109,6 @@ public class PlayerDataManager implements Listener {
                 .add(abilityName);
         saveData(playerId);
 
-        // Give XP for learning new ability
-        //Player player = plugin.getServer().getPlayer(playerId);
-        //if (player != null) {
-          //  plugin.getLevelManager().givePlayerExperience(player, 25, "Learned " + abilityName);
-        //}
     }
 
     public Set<String> getKnownAbilities(UUID playerId, SpellSchool school) {
