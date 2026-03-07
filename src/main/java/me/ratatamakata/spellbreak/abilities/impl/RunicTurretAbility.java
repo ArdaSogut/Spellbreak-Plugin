@@ -6,23 +6,16 @@ import org.bukkit.*;
 import org.bukkit.block.Block;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.entity.*;
-import org.bukkit.event.EventHandler;
-import org.bukkit.event.Listener;
-import org.bukkit.event.block.Action;
-import org.bukkit.event.entity.EntityDamageEvent;
-import org.bukkit.inventory.ItemStack;
-import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.potion.PotionEffect;
 import org.bukkit.potion.PotionEffectType;
 import org.bukkit.scheduler.BukkitRunnable;
 import org.bukkit.scheduler.BukkitTask;
-import org.bukkit.util.EulerAngle;
 import org.bukkit.util.Vector;
 import me.ratatamakata.spellbreak.level.SpellLevel;
 
 import java.util.*;
 
-public class RunicTurretAbility implements Ability, Listener {
+public class RunicTurretAbility implements Ability {
     private int cooldown = 21;
     private int manaCost = 60;
     private String requiredClass = "runesmith";
@@ -67,9 +60,9 @@ public class RunicTurretAbility implements Ability, Listener {
     }
 
     @Override
-    public boolean isTriggerAction(Action action) {
-        return (action == Action.LEFT_CLICK_AIR || action == Action.LEFT_CLICK_BLOCK) &&
-                Bukkit.getServer().getPlayer(activeTurrets.keySet().iterator().next()).isSneaking();
+    public boolean isTriggerAction(org.bukkit.event.block.Action action) {
+        return (action == org.bukkit.event.block.Action.LEFT_CLICK_AIR || action == org.bukkit.event.block.Action.LEFT_CLICK_BLOCK) &&
+                !activeTurrets.isEmpty() && Bukkit.getServer().getPlayer(activeTurrets.keySet().iterator().next()) != null && Bukkit.getServer().getPlayer(activeTurrets.keySet().iterator().next()).isSneaking();
     }
 
     @Override
@@ -153,36 +146,7 @@ public class RunicTurretAbility implements Ability, Listener {
         }
     }
 
-    // Handle damage to turrets
-    @EventHandler
-    public void onEntityDamage(EntityDamageEvent event) {
-        if (!(event.getEntity() instanceof ArmorStand)) return;
-
-        ArmorStand stand = (ArmorStand) event.getEntity();
-
-        // Cancel fire damage
-        if (event.getCause() == EntityDamageEvent.DamageCause.FIRE ||
-                event.getCause() == EntityDamageEvent.DamageCause.FIRE_TICK ||
-                event.getCause() == EntityDamageEvent.DamageCause.LAVA) {
-            event.setCancelled(true);
-            return;
-        }
-
-        // Check if this is one of our turrets
-        for (Set<RunicTurret> turrets : activeTurrets.values()) {
-            for (RunicTurret turret : turrets) {
-                if (turret.getArmorStand().equals(stand)) {
-                    event.setCancelled(true);
-                    
-                    // If hit by an entity, reduce health
-                    if (event instanceof org.bukkit.event.entity.EntityDamageByEntityEvent) {
-                        turret.takeHit();
-                    }
-                    return;
-                }
-            }
-        }
-    }
+    // No longer using EntityDamageEvent for health as per user request
 
     public class RunicTurret {
         private final Player owner;
@@ -195,7 +159,12 @@ public class RunicTurretAbility implements Ability, Listener {
         private boolean isActive = true;
         private boolean isLanded = false;
         private final SpellLevel sl;
-        private int hitsRemaining = 3;
+        
+        // Robot parts
+        private final BlockDisplay basePart;
+        private final BlockDisplay bodyPart;
+        private final BlockDisplay corePart;
+        private final BlockDisplay barrelPart;
         
         // Scaled fields
         public final int adjustedDuration;
@@ -218,9 +187,13 @@ public class RunicTurretAbility implements Ability, Listener {
             this.adjustedDamageFire = damageFire * sl.getDamageMultiplier();
             this.adjustedDamageIce = damageIce * sl.getDamageMultiplier();
 
-            // Create armor stand
+            // Create root armor stand
             this.armorStand = location.getWorld().spawn(location, ArmorStand.class);
-            setupArmorStand();
+            this.basePart = location.getWorld().spawn(location, BlockDisplay.class);
+            this.bodyPart = location.getWorld().spawn(location, BlockDisplay.class);
+            this.corePart = location.getWorld().spawn(location, BlockDisplay.class);
+            this.barrelPart = location.getWorld().spawn(location, BlockDisplay.class);
+            setupRobot();
 
             // Start lifetime countdown
             this.lifetimeTask = new BukkitRunnable() {
@@ -256,48 +229,46 @@ public class RunicTurretAbility implements Ability, Listener {
             }.runTaskTimer(Spellbreak.getInstance(), 1L, 1L);
         }
 
-        private void setupArmorStand() {
-            armorStand.setVisible(false); // Make invisible for custom model
+        private void setupRobot() {
+            armorStand.setVisible(false);
             armorStand.setBasePlate(false);
             armorStand.setArms(false);
             armorStand.setGravity(true);
-            armorStand.setSmall(false);
-            armorStand.setCustomNameVisible(true);
+            armorStand.setSmall(true); // Small so the pivot is lower
+            armorStand.setInvulnerable(true); // No health anymore
 
+            // Base/Legs (Anvil)
+            basePart.setBlock(Bukkit.createBlockData(Material.ANVIL));
+            org.bukkit.util.Transformation tBase = basePart.getTransformation();
+            tBase.getScale().set(0.6f, 0.6f, 0.6f);
+            tBase.getTranslation().set(-0.3f, 0, -0.3f);
+            basePart.setTransformation(tBase);
 
-            // Custom helmet with model data
-            ItemStack helmet = new ItemStack(Material.DISPENSER);
-            ItemMeta meta = helmet.getItemMeta();
-            if (meta != null) {
-                meta.setDisplayName("Runic Cannon");
-                helmet.setItemMeta(meta);
-            }
-            armorStand.getEquipment().setHelmet(helmet);
+            // Body (Iron Block)
+            bodyPart.setBlock(Bukkit.createBlockData(Material.IRON_BLOCK));
+            org.bukkit.util.Transformation tBody = bodyPart.getTransformation();
+            tBody.getScale().set(0.5f, 0.5f, 0.5f);
+            tBody.getTranslation().set(-0.25f, 0.6f, -0.25f);
+            bodyPart.setTransformation(tBody);
+            
+            // Core (Glowstone / changes during attack)
+            corePart.setBlock(Bukkit.createBlockData(Material.GLOWSTONE));
+            org.bukkit.util.Transformation tCore = corePart.getTransformation();
+            tCore.getScale().set(0.2f, 0.2f, 0.2f);
+            tCore.getTranslation().set(-0.1f, 0.75f, 0.2f); // Slightly sticking out front
+            corePart.setTransformation(tCore);
 
-            // Clear other equipment
-            armorStand.getEquipment().setChestplate(null);
-            armorStand.getEquipment().setLeggings(null);
-            armorStand.getEquipment().setBoots(null);
-            armorStand.getEquipment().setItemInMainHand(null);
-            updateHealthDisplay();
-        }
+            // Barrel (Dispenser)
+            barrelPart.setBlock(Bukkit.createBlockData(Material.DISPENSER));
+            org.bukkit.util.Transformation tBarrel = barrelPart.getTransformation();
+            tBarrel.getScale().set(0.3f, 0.3f, 0.5f);
+            tBarrel.getTranslation().set(-0.15f, 1.1f, 0.1f);
+            barrelPart.setTransformation(tBarrel);
 
-        public void takeHit() {
-            if (!isActive) return;
-            hitsRemaining--;
-            if (hitsRemaining <= 0) {
-                destroy();
-            } else {
-                updateHealthDisplay();
-                armorStand.getWorld().playSound(armorStand.getLocation(), Sound.ENTITY_IRON_GOLEM_HURT, 1.0f, 1.0f);
-                armorStand.getWorld().spawnParticle(Particle.DAMAGE_INDICATOR, armorStand.getLocation().add(0, 1.5, 0), 5, 0.2, 0.2, 0.2, 0.1);
-            }
-        }
-
-        private void updateHealthDisplay() {
-            String hearts = ChatColor.RED + "❤".repeat(Math.max(0, hitsRemaining)) 
-                          + ChatColor.GRAY + "❤".repeat(Math.max(0, 3 - hitsRemaining));
-            armorStand.setCustomName(ChatColor.GOLD + "Runic Cannon " + hearts);
+            armorStand.addPassenger(basePart);
+            armorStand.addPassenger(bodyPart);
+            armorStand.addPassenger(corePart);
+            armorStand.addPassenger(barrelPart);
         }
 
         public void destroy() {
@@ -319,6 +290,10 @@ public class RunicTurretAbility implements Ability, Listener {
 
             // Remove armor stand
             armorStand.remove();
+            if (basePart != null && !basePart.isDead()) basePart.remove();
+            if (bodyPart != null && !bodyPart.isDead()) bodyPart.remove();
+            if (corePart != null && !corePart.isDead()) corePart.remove();
+            if (barrelPart != null && !barrelPart.isDead()) barrelPart.remove();
 
             // Remove from player's active turrets
             removeTurret(owner.getUniqueId(), this);
@@ -347,19 +322,18 @@ public class RunicTurretAbility implements Ability, Listener {
             LivingEntity target = findNearestTarget();
             if (target == null) return;
 
-            // Rotate armor stand to face target
+            // Adjust armor stand rotation to face target
             Location standLoc = armorStand.getLocation();
             Vector direction = target.getLocation().toVector().subtract(standLoc.toVector()).normalize();
-            standLoc.setDirection(direction);
+            standLoc.setDirection(new Vector(direction.getX(), 0, direction.getZ())); // Keep it flat
             armorStand.teleport(standLoc);
 
-            // Update arm pose to point forward like a cannon barrel
-            double pitch = -Math.toRadians(standLoc.getPitch());
-            double yaw = Math.toRadians(standLoc.getYaw());
-            armorStand.setRightArmPose(new EulerAngle(Math.toRadians(270), 0, 0));
-
-            // Rotate the "blast furnace" in the hand to aim at target
-            armorStand.setHeadPose(new EulerAngle(pitch, 0, 0));
+            // Pitch the barrel using transformation
+            double pitch = Math.toRadians(standLoc.clone().setDirection(direction).getPitch());
+            org.bukkit.util.Transformation tBarrel = barrelPart.getTransformation();
+            tBarrel.getLeftRotation().setAngleAxis((float)-pitch, 1, 0, 0);
+            tBarrel.getTranslation().set(-0.15f, 1.1f, 0.1f);
+            barrelPart.setTransformation(tBarrel);
 
             // Fire projectile at target
             if (sl.getLevel() >= 5) { // L5: Twin barrels
@@ -418,14 +392,17 @@ public class RunicTurretAbility implements Ability, Listener {
                 case 0: // Base (Fast)
                     projectileColor = Color.fromRGB(0, 200, 255);
                     launchSound = Sound.ENTITY_ARROW_SHOOT;
+                    corePart.setBlock(Bukkit.createBlockData(Material.LIGHT_BLUE_CONCRETE));
                     break;
                 case 1: // Fire (Slow)
                     projectileColor = Color.fromRGB(255, 100, 0);
                     launchSound = Sound.BLOCK_FIRE_AMBIENT;
+                    corePart.setBlock(Bukkit.createBlockData(Material.REDSTONE_BLOCK));
                     break;
                 case 2: // Ice (Medium)
                     projectileColor = Color.fromRGB(200, 200, 255);
                     launchSound = Sound.BLOCK_GLASS_BREAK;
+                    corePart.setBlock(Bukkit.createBlockData(Material.BLUE_ICE));
                     break;
                 default:
                     projectileColor = Color.WHITE;

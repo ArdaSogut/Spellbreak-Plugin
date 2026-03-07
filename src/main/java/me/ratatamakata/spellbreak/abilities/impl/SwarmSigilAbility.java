@@ -107,6 +107,8 @@ public class SwarmSigilAbility implements Ability {
         private int stickTicks = 0;
         private Location wanderTarget;
         private final BlockDisplay display;
+        private final BlockDisplay wing1;
+        private final BlockDisplay wing2;
         private boolean exploded = false;
         private final SpellLevel sl;
         private final double adjustedExplosionDamage;
@@ -132,6 +134,26 @@ public class SwarmSigilAbility implements Ability {
             t.getTranslation().set(-scale/2, -scale/2, -scale/2);
             display.setTransformation(t);
 
+            // Wing 1 (Diagonal Pane 1)
+            this.wing1 = owner.getWorld().spawn(location, BlockDisplay.class);
+            wing1.setBlock(Bukkit.createBlockData(Material.WHITE_STAINED_GLASS_PANE));
+            org.bukkit.util.Transformation w1t = wing1.getTransformation();
+            w1t.getScale().set(scale * 1.5f, scale * 0.2f, scale * 1.5f);
+            w1t.getTranslation().set(-scale*0.75f, 0, -scale*0.75f);
+            w1t.getLeftRotation().setAngleAxis((float)Math.toRadians(45), 0, 1, 0);
+            wing1.setTransformation(w1t);
+
+            // Wing 2 (Diagonal Pane 2)
+            this.wing2 = owner.getWorld().spawn(location, BlockDisplay.class);
+            wing2.setBlock(Bukkit.createBlockData(Material.WHITE_STAINED_GLASS_PANE));
+            org.bukkit.util.Transformation w2t = wing2.getTransformation();
+            w2t.getScale().set(scale * 1.5f, scale * 0.2f, scale * 1.5f);
+            w2t.getTranslation().set(-scale*0.75f, 0, -scale*0.75f);
+            w2t.getLeftRotation().setAngleAxis((float)Math.toRadians(-45), 0, 1, 0);
+            wing2.setTransformation(w2t);
+
+            display.addPassenger(wing1);
+            display.addPassenger(wing2);
             display.teleport(location);
         }
 
@@ -242,6 +264,8 @@ public class SwarmSigilAbility implements Ability {
             if (display != null && !display.isDead()) {
                 display.remove();
             }
+            if (wing1 != null && !wing1.isDead()) wing1.remove();
+            if (wing2 != null && !wing2.isDead()) wing2.remove();
             List<SwarmDrone> list = activeDrones.get(owner.getUniqueId());
             if (list != null) {
                 list.remove(this);
@@ -265,6 +289,8 @@ public class SwarmSigilAbility implements Ability {
                 if (drone.display != null && !drone.display.isDead()) {
                     drone.display.remove();
                 }
+                if (drone.wing1 != null && !drone.wing1.isDead()) drone.wing1.remove();
+                if (drone.wing2 != null && !drone.wing2.isDead()) drone.wing2.remove();
             }
         }
     }
