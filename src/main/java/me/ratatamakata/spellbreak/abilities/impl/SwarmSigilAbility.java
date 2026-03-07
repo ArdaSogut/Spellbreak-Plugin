@@ -6,8 +6,6 @@ import org.bukkit.*;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.entity.*;
 import org.bukkit.event.block.Action;
-import org.bukkit.inventory.ItemStack;
-import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.potion.PotionEffect;
 import org.bukkit.potion.PotionEffectType;
 import org.bukkit.scheduler.BukkitRunnable;
@@ -108,7 +106,7 @@ public class SwarmSigilAbility implements Ability {
         private int ticksAlive = 0;
         private int stickTicks = 0;
         private Location wanderTarget;
-        private final ItemDisplay display;
+        private final BlockDisplay display;
         private boolean exploded = false;
         private final SpellLevel sl;
         private final double adjustedExplosionDamage;
@@ -123,19 +121,17 @@ public class SwarmSigilAbility implements Ability {
             this.location = c.clone().add(Math.cos(angle) * r, 0, Math.sin(angle) * r);
             this.wanderTarget = this.location;
 
-            this.display = owner.getWorld().spawn(location, ItemDisplay.class);
-            ItemStack paper = new ItemStack(Material.PAPER);
-            ItemMeta meta = paper.getItemMeta(); meta.setCustomModelData(1002); paper.setItemMeta(meta);
-            display.setItemStack(paper);
-            display.setGravity(false);
-            display.setBillboard(Display.Billboard.FIXED);
+            this.display = owner.getWorld().spawn(location, BlockDisplay.class);
+            display.setBlock(Bukkit.createBlockData(Material.HONEY_BLOCK));
             
-            if (sl.getLevel() >= 3) { // L3: Bigger bees
-                org.bukkit.util.Transformation t = display.getTransformation();
-                t.getScale().set(1.5f, 1.5f, 1.5f);
-                display.setTransformation(t);
-            }
-            
+            org.bukkit.util.Transformation t = display.getTransformation();
+            // Scale it down to be a small block (e.g. 0.4x)
+            float scale = (sl.getLevel() >= 3) ? 0.6f : 0.4f;
+            t.getScale().set(scale, scale, scale);
+            // Center it
+            t.getTranslation().set(-scale/2, -scale/2, -scale/2);
+            display.setTransformation(t);
+
             display.teleport(location);
         }
 

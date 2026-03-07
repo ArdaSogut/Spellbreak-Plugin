@@ -262,16 +262,14 @@ public class RunicTurretAbility implements Ability, Listener {
             armorStand.setArms(false);
             armorStand.setGravity(true);
             armorStand.setSmall(false);
-            armorStand.setInvulnerable(true);
             armorStand.setCustomNameVisible(true);
 
 
             // Custom helmet with model data
-            ItemStack helmet = new ItemStack(Material.PAPER);
+            ItemStack helmet = new ItemStack(Material.DISPENSER);
             ItemMeta meta = helmet.getItemMeta();
             if (meta != null) {
                 meta.setDisplayName("Runic Cannon");
-                meta.setCustomModelData(customModelData);
                 helmet.setItemMeta(meta);
             }
             armorStand.getEquipment().setHelmet(helmet);
@@ -379,6 +377,7 @@ public class RunicTurretAbility implements Ability, Listener {
 
             for (Entity entity : armorStand.getNearbyEntities(adjustedAttackRadius, adjustedAttackRadius, adjustedAttackRadius)) {
                 if (!(entity instanceof LivingEntity) ||
+                        entity instanceof ArmorStand ||
                         entity.equals(owner) ||
                         entity.equals(armorStand) ||
                         (entity instanceof Player && !owner.canSee((Player) entity))) {
