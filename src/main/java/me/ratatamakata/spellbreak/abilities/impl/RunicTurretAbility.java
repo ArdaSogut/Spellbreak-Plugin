@@ -223,6 +223,9 @@ public class RunicTurretAbility implements Ability {
                             isLanded = true;
                             startAttacking();
                             cancel();
+                        } else {
+                            // Sync falling
+                            syncPartsToArmorStand(armorStand.getLocation());
                         }
                     }
                 }
@@ -237,36 +240,52 @@ public class RunicTurretAbility implements Ability {
             armorStand.setSmall(true); // Small so the pivot is lower
             armorStand.setInvulnerable(true); // No health anymore
 
+            // Scale up factors
+            float sm = 1.3f; // Size multiplier
+
             // Base/Legs (Anvil)
             basePart.setBlock(Bukkit.createBlockData(Material.ANVIL));
             org.bukkit.util.Transformation tBase = basePart.getTransformation();
-            tBase.getScale().set(0.6f, 0.6f, 0.6f);
-            tBase.getTranslation().set(-0.3f, 0, -0.3f);
+            tBase.getScale().set(0.6f * sm, 0.6f * sm, 0.6f * sm);
+            tBase.getTranslation().set(-0.3f * sm, 0, -0.3f * sm);
             basePart.setTransformation(tBase);
 
             // Body (Iron Block)
             bodyPart.setBlock(Bukkit.createBlockData(Material.IRON_BLOCK));
             org.bukkit.util.Transformation tBody = bodyPart.getTransformation();
-            tBody.getScale().set(0.5f, 0.5f, 0.5f);
-            tBody.getTranslation().set(-0.25f, 0.6f, -0.25f);
+            tBody.getScale().set(0.5f * sm, 0.5f * sm, 0.5f * sm);
+            tBody.getTranslation().set(-0.25f * sm, 0.6f * sm, -0.25f * sm);
             bodyPart.setTransformation(tBody);
             
             // Core (Glowstone / changes during attack)
             corePart.setBlock(Bukkit.createBlockData(Material.GLOWSTONE));
             org.bukkit.util.Transformation tCore = corePart.getTransformation();
-            tCore.getScale().set(0.2f, 0.2f, 0.2f);
-            tCore.getTranslation().set(-0.1f, 0.75f, 0.2f); // Slightly sticking out front
+            tCore.getScale().set(0.2f * sm, 0.2f * sm, 0.2f * sm);
+            tCore.getTranslation().set(-0.1f * sm, 0.75f * sm, 0.2f * sm); // Slightly sticking out front
             corePart.setTransformation(tCore);
 
             // Barrel (Dispenser)
             barrelPart.setBlock(Bukkit.createBlockData(Material.DISPENSER));
             org.bukkit.util.Transformation tBarrel = barrelPart.getTransformation();
-            tBarrel.getScale().set(0.3f, 0.3f, 0.5f);
-            tBarrel.getTranslation().set(-0.15f, 1.1f, 0.1f);
+            tBarrel.getScale().set(0.3f * sm, 0.3f * sm, 0.5f * sm);
+            tBarrel.getTranslation().set(-0.15f * sm, 1.1f * sm, 0.1f * sm);
             barrelPart.setTransformation(tBarrel);
 
-            // We won't use passengers anymore because passengers don't inherit yaw smoothly
-            // Instead, we will teleport them alongside the ArmorStand every time it aims
+            // Initial Sync
+            syncPartsToArmorStand(armorStand.getLocation());
+        }
+
+        private void syncPartsToArmorStand(Location loc) {
+            basePart.teleport(loc);
+            bodyPart.teleport(loc);
+            corePart.teleport(loc);
+            barrelPart.teleport(loc);
+            
+            // Re-apply barrel pitch on sync
+            double pitch = Math.toRadians(loc.getPitch());
+            org.bukkit.util.Transformation tBarrel = barrelPart.getTransformation();
+            tBarrel.getLeftRotation().setAngleAxis((float)-pitch, 1, 0, 0);
+            barrelPart.setTransformation(tBarrel);
         }
 
         public void destroy() {
@@ -323,21 +342,11 @@ public class RunicTurretAbility implements Ability {
             // Adjust armor stand rotation to face target
             Location standLoc = armorStand.getLocation();
             Vector direction = target.getLocation().toVector().subtract(standLoc.toVector()).normalize();
-            standLoc.setDirection(new Vector(direction.getX(), 0, direction.getZ())); // Keep it flat
+            standLoc.setDirection(new Vector(direction.getX(), direction.getY(), direction.getZ())); // Keep full direction for pitch calculation
             armorStand.teleport(standLoc);
 
-            // Teleport the body parts to the exact same location with the new yaw
-            basePart.teleport(standLoc);
-            bodyPart.teleport(standLoc);
-            corePart.teleport(standLoc);
-            barrelPart.teleport(standLoc);
-
-            // Pitch the barrel using transformation
-            double pitch = Math.toRadians(standLoc.clone().setDirection(direction).getPitch());
-            org.bukkit.util.Transformation tBarrel = barrelPart.getTransformation();
-            tBarrel.getLeftRotation().setAngleAxis((float)-pitch, 1, 0, 0);
-            tBarrel.getTranslation().set(-0.15f, 1.1f, 0.1f);
-            barrelPart.setTransformation(tBarrel);
+            // Update all block models to match this stand position and pitch
+            syncPartsToArmorStand(standLoc);
 
             // Fire projectile at target
             if (sl.getLevel() >= 5) { // L5: Twin barrels
