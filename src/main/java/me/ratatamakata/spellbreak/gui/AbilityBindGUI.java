@@ -133,7 +133,7 @@ public class AbilityBindGUI {
 
         ChatColor cc = CharacterSelectGUI.getClassColor(cls);
         meta.setDisplayName(cc + "" + ChatColor.BOLD + cls
-                + ChatColor.RESET + ChatColor.DARK_GRAY + " (Slot " + ((slotIndex % 2) + 1) + ")");
+                + ChatColor.RESET + "" + ChatColor.DARK_GRAY + " (Slot " + ((slotIndex % 2) + 1) + ")");
 
         PlayerLevel pl = Spellbreak.getInstance().getLevelManager()
                 .getPlayerLevel(player.getUniqueId(), cls);
@@ -146,7 +146,7 @@ public class AbilityBindGUI {
         lore.add(ChatColor.GRAY + "Health: " + ChatColor.RED + pl.getMaxHealth()
                 + ChatColor.GRAY + "  Mana: " + ChatColor.AQUA + pl.getMaxMana());
         lore.add("");
-        lore.add(ChatColor.DARK_GRAY + ChatColor.ITALIC + CharacterSelectGUI.getClassDescription(cls));
+        lore.add(ChatColor.DARK_GRAY + "" + ChatColor.ITALIC + CharacterSelectGUI.getClassDescription(cls));
         meta.setLore(lore);
 
         // Glow
@@ -187,7 +187,7 @@ public class AbilityBindGUI {
             if (desc != null && !desc.isBlank()) {
                 // Word-wrap description at ~40 chars
                 for (String line : wrapText(desc, 40)) {
-                    lore.add(ChatColor.DARK_GRAY + "" + ChatColor.ITALIC + line);
+                    lore.add("" + ChatColor.DARK_GRAY + ChatColor.ITALIC + line);
                 }
                 lore.add("");
             }
@@ -197,7 +197,7 @@ public class AbilityBindGUI {
         String[] bindings = slot.getBindings();
         boolean bound = false;
         for (int i = 0; i < 9; i++) {
-            if (abilityName.equalsIgnoreCase(bindings[i])) {
+            if (bindings[i] != null && abilityName.equalsIgnoreCase(bindings[i])) {
                 lore.add(ChatColor.GREEN + "✔ Bound to hotbar slot " + (i + 1));
                 bound = true;
             }
