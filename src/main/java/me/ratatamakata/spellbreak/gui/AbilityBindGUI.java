@@ -207,6 +207,9 @@ public class AbilityBindGUI {
         lore.add("");
         lore.add(ChatColor.YELLOW + "Left-click a binding slot below,");
         lore.add(ChatColor.YELLOW + "then click here to assign.");
+        lore.add("");
+        lore.add(ChatColor.AQUA + "Right-Click to " + ChatColor.BOLD + "Upgrade" + ChatColor.AQUA + " Spell");
+        lore.add(ChatColor.RED + "Middle-Click to " + ChatColor.BOLD + "Downgrade" + ChatColor.RED + " Spell");
 
         meta.setLore(lore);
 

@@ -9,9 +9,11 @@ import org.bukkit.Sound;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
-import org.bukkit.event.inventory.ClickType;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.inventory.meta.ItemMeta;
+import me.ratatamakata.spellbreak.level.SpellLevel;
+import me.ratatamakata.spellbreak.level.PlayerLevel;
 import org.bukkit.inventory.meta.ItemMeta;
 
 import java.util.HashMap;
@@ -72,14 +74,9 @@ public class AbilityBindListener implements Listener {
 
         // --- Ability items (rows 1 and 2) ---
         if ((raw >= 9 && raw < 18) || (raw >= 18 && raw < 27)) {
-            if (event.getClick() != ClickType.LEFT) return;
-
-            Integer target = selectedSlot.get(uuid);
-            if (target == null) {
-                player.sendMessage(ChatColor.RED + "⚠ First select a binding slot (click a green slot in row 5).");
-                player.playSound(player.getLocation(), Sound.ENTITY_VILLAGER_NO, 0.8f, 1f);
-                return;
-            }
+            if (event.getClick() != org.bukkit.event.inventory.ClickType.LEFT && 
+                event.getClick() != org.bukkit.event.inventory.ClickType.RIGHT && 
+                event.getClick() != org.bukkit.event.inventory.ClickType.MIDDLE) return;
 
             // Read ability name from item display name
             ItemStack clicked = event.getCurrentItem();
@@ -94,10 +91,26 @@ public class AbilityBindListener implements Listener {
             // Trim potential number prefix (shouldn't be there, but safety)
             String abilityName = rawName.trim();
 
-            bindAbility(player, target, abilityName);
-            selectedSlot.remove(uuid); // deselect after binding
-            refreshAll(player, event);
-            return;
+            if (event.getClick() == org.bukkit.event.inventory.ClickType.LEFT) {
+                Integer target = selectedSlot.get(uuid);
+                if (target == null) {
+                    player.sendMessage(ChatColor.RED + "⚠ First select a binding slot (click a green slot in row 5).");
+                    player.playSound(player.getLocation(), Sound.ENTITY_VILLAGER_NO, 0.8f, 1f);
+                    return;
+                }
+                bindAbility(player, target, abilityName);
+                selectedSlot.remove(uuid); // deselect after binding
+                refreshAll(player, event);
+                return;
+            } else if (event.getClick() == org.bukkit.event.inventory.ClickType.RIGHT) {
+                upgradeSpell(player, abilityName);
+                refreshAll(player, event);
+                return;
+            } else if (event.getClick() == org.bukkit.event.inventory.ClickType.MIDDLE) {
+                downgradeSpell(player, abilityName);
+                refreshAll(player, event);
+                return;
+            }
         }
     }
 
@@ -127,6 +140,67 @@ public class AbilityBindListener implements Listener {
                 + CharacterSelectGUI.getClassColor(slot.getClassName()) + ChatColor.BOLD + abilityName
                 + ChatColor.RESET + ChatColor.GRAY + " to hotbar slot " + (hotbarSlot + 1) + ".");
         player.playSound(player.getLocation(), Sound.ENTITY_EXPERIENCE_ORB_PICKUP, 0.8f, 1.4f);
+    }
+
+    private void upgradeSpell(Player player, String abilityName) {
+        Spellbreak plugin = Spellbreak.getInstance();
+        UUID uuid = player.getUniqueId();
+        int activeIdx = plugin.getPlayerDataManager().getActiveSlotIndex(uuid);
+        if (activeIdx < 0) return;
+        CharacterSlot slot = plugin.getPlayerDataManager().getCharacterSlot(uuid, activeIdx);
+        if (slot == null) return;
+
+        String cls = slot.getClassName();
+        SpellLevel sl = plugin.getLevelManager().getSpellLevel(uuid, cls, abilityName);
+        if (sl.getLevel() >= 5) {
+            player.sendMessage(ChatColor.RED + "⚠ This spell is already at Max Level (5).");
+            player.playSound(player.getLocation(), Sound.ENTITY_VILLAGER_NO, 0.8f, 1f);
+            return;
+        }
+
+        PlayerLevel pl = plugin.getLevelManager().getPlayerLevel(uuid, cls);
+        int totalSpellLevels = 0;
+        for (String sp : plugin.getSpellClassManager().getClassAbilities(cls)) {
+            totalSpellLevels += plugin.getLevelManager().getSpellLevel(uuid, cls, sp).getLevel();
+        }
+
+        int maxSpellLevels = pl.getLevel() - 1 + plugin.getSpellClassManager().getClassAbilities(cls).size();
+        if (totalSpellLevels >= maxSpellLevels) {
+            player.sendMessage(ChatColor.RED + "⚠ Not enough Skill Points! Level up your character to earn more.");
+            player.playSound(player.getLocation(), Sound.ENTITY_VILLAGER_NO, 0.8f, 1f);
+            return;
+        }
+
+        sl.setLevel(sl.getLevel() + 1);
+        plugin.getLevelManager().saveSpellLevels(uuid);
+        player.sendMessage(ChatColor.AQUA + "✦ " + ChatColor.RESET + "Upgraded " 
+                + CharacterSelectGUI.getClassColor(cls) + ChatColor.BOLD + abilityName 
+                + ChatColor.RESET + ChatColor.AQUA + " to Level " + sl.getLevel() + "!");
+        player.playSound(player.getLocation(), Sound.ENTITY_PLAYER_LEVELUP, 0.8f, 1.5f);
+    }
+
+    private void downgradeSpell(Player player, String abilityName) {
+        Spellbreak plugin = Spellbreak.getInstance();
+        UUID uuid = player.getUniqueId();
+        int activeIdx = plugin.getPlayerDataManager().getActiveSlotIndex(uuid);
+        if (activeIdx < 0) return;
+        CharacterSlot slot = plugin.getPlayerDataManager().getCharacterSlot(uuid, activeIdx);
+        if (slot == null) return;
+
+        String cls = slot.getClassName();
+        SpellLevel sl = plugin.getLevelManager().getSpellLevel(uuid, cls, abilityName);
+        
+        if (sl.getLevel() <= 1) {
+            player.sendMessage(ChatColor.RED + "⚠ Spell is already at minimum Level (1).");
+            player.playSound(player.getLocation(), Sound.ENTITY_VILLAGER_NO, 0.8f, 1f);
+            return;
+        }
+
+        sl.setLevel(sl.getLevel() - 1);
+        plugin.getLevelManager().saveSpellLevels(uuid);
+        player.sendMessage(ChatColor.GRAY + "✦ Downgraded " + ChatColor.BOLD + abilityName 
+                + ChatColor.RESET + ChatColor.GRAY + " to Level " + sl.getLevel() + ". (1 Skill Point Refunded)");
+        player.playSound(player.getLocation(), Sound.BLOCK_ANVIL_USE, 0.6f, 0.8f);
     }
 
     private void clearBinding(Player player, int hotbarSlot) {
