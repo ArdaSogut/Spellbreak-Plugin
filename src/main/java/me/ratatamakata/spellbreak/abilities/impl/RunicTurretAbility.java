@@ -173,6 +173,11 @@ public class RunicTurretAbility implements Ability, Listener {
             for (RunicTurret turret : turrets) {
                 if (turret.getArmorStand().equals(stand)) {
                     event.setCancelled(true);
+                    
+                    // If hit by an entity, reduce health
+                    if (event instanceof org.bukkit.event.entity.EntityDamageByEntityEvent) {
+                        turret.takeHit();
+                    }
                     return;
                 }
             }
@@ -190,6 +195,7 @@ public class RunicTurretAbility implements Ability, Listener {
         private boolean isActive = true;
         private boolean isLanded = false;
         private final SpellLevel sl;
+        private int hitsRemaining = 3;
         
         // Scaled fields
         public final int adjustedDuration;
@@ -275,7 +281,25 @@ public class RunicTurretAbility implements Ability, Listener {
             armorStand.getEquipment().setLeggings(null);
             armorStand.getEquipment().setBoots(null);
             armorStand.getEquipment().setItemInMainHand(null);
-            armorStand.setCustomName("Runic Cannon");
+            updateHealthDisplay();
+        }
+
+        public void takeHit() {
+            if (!isActive) return;
+            hitsRemaining--;
+            if (hitsRemaining <= 0) {
+                destroy();
+            } else {
+                updateHealthDisplay();
+                armorStand.getWorld().playSound(armorStand.getLocation(), Sound.ENTITY_IRON_GOLEM_HURT, 1.0f, 1.0f);
+                armorStand.getWorld().spawnParticle(Particle.DAMAGE_INDICATOR, armorStand.getLocation().add(0, 1.5, 0), 5, 0.2, 0.2, 0.2, 0.1);
+            }
+        }
+
+        private void updateHealthDisplay() {
+            String hearts = ChatColor.RED + "❤".repeat(Math.max(0, hitsRemaining)) 
+                          + ChatColor.GRAY + "❤".repeat(Math.max(0, 3 - hitsRemaining));
+            armorStand.setCustomName(ChatColor.GOLD + "Runic Cannon " + hearts);
         }
 
         public void destroy() {

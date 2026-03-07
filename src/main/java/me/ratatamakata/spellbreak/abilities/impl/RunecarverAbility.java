@@ -285,8 +285,16 @@ public class RunecarverAbility implements Ability {
         }
 
         private void adjustHeightAboveGround() {
-            double groundY = loc.getWorld().getHighestBlockYAt(loc);
-            loc.setY(groundY + bladeHeight);
+            // Check from 2 blocks above current Y, down to 10 blocks below
+            Location check = loc.clone().add(0, 2, 0);
+            for (int i = 0; i < 12; i++) {
+                if (check.getBlock().getType().isSolid()) {
+                    loc.setY(check.getBlockY() + 1 + bladeHeight);
+                    return;
+                }
+                check.subtract(0, 1, 0);
+            }
+            // If no solid ground found within range, blade maintains current Y trajectory
         }
 
         void updateDirection(Vector targetPos) {
