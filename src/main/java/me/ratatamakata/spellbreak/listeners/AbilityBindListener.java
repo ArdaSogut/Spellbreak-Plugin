@@ -40,11 +40,8 @@ public class AbilityBindListener implements Listener {
         if (!(event.getWhoClicked() instanceof Player player)) return;
 
         String title = event.getView().getTitle();
-        // Spigot 1.20+ inventory titles sometimes drop formatting codes in event.getView().getTitle()
-        if (!title.startsWith(AbilityBindGUI.TITLE_PREFIX)) {
-            if (!ChatColor.stripColor(title).startsWith("✦ Manage: ")) {
-                return;
-            }
+        if (title == null || !title.contains("Manage:")) {
+            return;
         }
 
         event.setCancelled(true);
