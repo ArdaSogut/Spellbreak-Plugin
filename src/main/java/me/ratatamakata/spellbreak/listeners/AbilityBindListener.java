@@ -40,7 +40,12 @@ public class AbilityBindListener implements Listener {
         if (!(event.getWhoClicked() instanceof Player player)) return;
 
         String title = event.getView().getTitle();
-        if (!title.startsWith(AbilityBindGUI.TITLE_PREFIX)) return;
+        // Spigot 1.20+ inventory titles sometimes drop formatting codes in event.getView().getTitle()
+        if (!title.startsWith(AbilityBindGUI.TITLE_PREFIX)) {
+            if (!ChatColor.stripColor(title).startsWith("✦ Manage: ")) {
+                return;
+            }
+        }
 
         event.setCancelled(true);
 
@@ -142,7 +147,8 @@ public class AbilityBindListener implements Listener {
         if (!meta.hasDisplayName()) return null;
         String rawName = ChatColor.stripColor(meta.getDisplayName());
         if (rawName == null || rawName.isBlank()) return null;
-        return rawName.trim();
+        rawName = rawName.replace("▶", "").replaceAll("[^a-zA-Z0-9 ]", "").trim();
+        return rawName;
     }
 
     private void bindAbility(Player player, int hotbarSlot, String abilityName) {
