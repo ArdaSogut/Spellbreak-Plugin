@@ -265,10 +265,8 @@ public class RunicTurretAbility implements Ability {
             tBarrel.getTranslation().set(-0.15f, 1.1f, 0.1f);
             barrelPart.setTransformation(tBarrel);
 
-            armorStand.addPassenger(basePart);
-            armorStand.addPassenger(bodyPart);
-            armorStand.addPassenger(corePart);
-            armorStand.addPassenger(barrelPart);
+            // We won't use passengers anymore because passengers don't inherit yaw smoothly
+            // Instead, we will teleport them alongside the ArmorStand every time it aims
         }
 
         public void destroy() {
@@ -327,6 +325,12 @@ public class RunicTurretAbility implements Ability {
             Vector direction = target.getLocation().toVector().subtract(standLoc.toVector()).normalize();
             standLoc.setDirection(new Vector(direction.getX(), 0, direction.getZ())); // Keep it flat
             armorStand.teleport(standLoc);
+
+            // Teleport the body parts to the exact same location with the new yaw
+            basePart.teleport(standLoc);
+            bodyPart.teleport(standLoc);
+            corePart.teleport(standLoc);
+            barrelPart.teleport(standLoc);
 
             // Pitch the barrel using transformation
             double pitch = Math.toRadians(standLoc.clone().setDirection(direction).getPitch());

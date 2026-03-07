@@ -138,8 +138,8 @@ public class SwarmSigilAbility implements Ability {
             this.wing1 = owner.getWorld().spawn(location, BlockDisplay.class);
             wing1.setBlock(Bukkit.createBlockData(Material.WHITE_STAINED_GLASS_PANE));
             org.bukkit.util.Transformation w1t = wing1.getTransformation();
-            w1t.getScale().set(scale * 1.5f, scale * 0.2f, scale * 1.5f);
-            w1t.getTranslation().set(-scale*0.75f, 0, -scale*0.75f);
+            w1t.getScale().set(scale * 2.5f, scale * 0.2f, scale * 2.5f);
+            w1t.getTranslation().set(-scale*1.25f, 0, -scale*1.25f);
             w1t.getLeftRotation().setAngleAxis((float)Math.toRadians(45), 0, 1, 0);
             wing1.setTransformation(w1t);
 
@@ -147,14 +147,14 @@ public class SwarmSigilAbility implements Ability {
             this.wing2 = owner.getWorld().spawn(location, BlockDisplay.class);
             wing2.setBlock(Bukkit.createBlockData(Material.WHITE_STAINED_GLASS_PANE));
             org.bukkit.util.Transformation w2t = wing2.getTransformation();
-            w2t.getScale().set(scale * 1.5f, scale * 0.2f, scale * 1.5f);
-            w2t.getTranslation().set(-scale*0.75f, 0, -scale*0.75f);
+            w2t.getScale().set(scale * 2.5f, scale * 0.2f, scale * 2.5f);
+            w2t.getTranslation().set(-scale*1.25f, 0, -scale*1.25f);
             w2t.getLeftRotation().setAngleAxis((float)Math.toRadians(-45), 0, 1, 0);
             wing2.setTransformation(w2t);
 
-            display.addPassenger(wing1);
-            display.addPassenger(wing2);
-            display.teleport(location);
+            // Do not use passengers, teleport them directly with the drone to prevent desync
+            wing1.teleport(location);
+            wing2.teleport(location);
         }
 
         @Override
@@ -169,7 +169,13 @@ public class SwarmSigilAbility implements Ability {
                 case STUCK: updateStuck(); break;
             }
 
+            // Update yaw based on velocity 
+            if (velocity.lengthSquared() > 0.01) {
+                location.setDirection(velocity);
+            }
             display.teleport(location);
+            wing1.teleport(location);
+            wing2.teleport(location);
             spawnEffects();
         }
 
