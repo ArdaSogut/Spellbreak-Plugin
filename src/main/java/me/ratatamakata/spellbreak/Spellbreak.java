@@ -9,6 +9,7 @@ import me.ratatamakata.spellbreak.commands.*;
 import me.ratatamakata.spellbreak.dailies.DailiesListener;
 import me.ratatamakata.spellbreak.dailies.DailyMissionManager;
 import me.ratatamakata.spellbreak.dailies.DailyProgressListener;
+import me.ratatamakata.spellbreak.gui.CharacterSelectGUI;
 import me.ratatamakata.spellbreak.listeners.*;
 import me.ratatamakata.spellbreak.listeners.MeteorLashListener;
 import me.ratatamakata.spellbreak.listeners.TidepoolListener;
@@ -140,6 +141,8 @@ public final class Spellbreak extends JavaPlugin implements Listener {
         getServer().getPluginManager().registerEvents(new PhotonBeamListener(), this);
         getServer().getPluginManager().registerEvents(new QuantumAnchorListener(), this);
         getServer().getPluginManager().registerEvents(new SolarLanceListener(), this);
+        getServer().getPluginManager().registerEvents(new CharacterSelectListener(this), this);
+        getServer().getPluginManager().registerEvents(new AbilityBindListener(), this);
 
 
 
@@ -170,6 +173,11 @@ public final class Spellbreak extends JavaPlugin implements Listener {
         manaSystem.startRegenerationTask();
 
         getLogger().info("Spellbreak v1.0 enabled!");
+    }
+
+    /** Opens the Wynncraft-style character selection GUI for a player. */
+    public void openCharacterSelectGUI(org.bukkit.entity.Player player) {
+        CharacterSelectGUI.open(player);
     }
 
     @Override

@@ -26,10 +26,23 @@ public class LevelManager {
         if (!levelFolder.exists()) levelFolder.mkdirs();
     }
 
+    /**
+     * Builds a slot-qualified class key so that each character slot has its own
+     * independent level data, even when two slots share the same class name.
+     * e.g.  "Necromancer" + active slot 0  →  "Necromancer#0"
+     *
+     * Falls back to plain className if no slot is active (avoids NPE during
+     * edge cases like the very first join before a slot has been selected).
+     */
+    private String slotKey(UUID playerId, String className) {
+        int slot = plugin.getPlayerDataManager().getActiveSlotIndex(playerId);
+        return slot >= 0 ? className + "#" + slot : className;
+    }
+
     // Player Level Methods
     public PlayerLevel getPlayerLevel(UUID playerId, String className) {
         return playerLevels.computeIfAbsent(playerId, k -> new HashMap<>())
-                .computeIfAbsent(className, k -> new PlayerLevel());
+                .computeIfAbsent(slotKey(playerId, className), k -> new PlayerLevel());
     }
     public Set<UUID> getAllPlayerLevelIds() {
         return Collections.unmodifiableSet(playerLevels.keySet());
@@ -68,7 +81,7 @@ public class LevelManager {
     // Spell Level Methods
     public SpellLevel getSpellLevel(UUID playerId, String className, String spellName) {
         return spellLevels.computeIfAbsent(playerId, k -> new HashMap<>())
-                .computeIfAbsent(className, k -> new HashMap<>())
+                .computeIfAbsent(slotKey(playerId, className), k -> new HashMap<>())
                 .computeIfAbsent(spellName, SpellLevel::new);
     }
 

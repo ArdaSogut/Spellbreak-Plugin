@@ -55,3 +55,9 @@ classes:
       - PhotonBeam
       - QuantumAnchor
       - SolarLance
+
+# -------------------------------------------------------
+# Character Select GUI Settings
+# -------------------------------------------------------
+# Open the character selection GUI automatically when a player joins
+open-gui-on-join: true

@@ -2,6 +2,12 @@ package me.ratatamakata.spellbreak.abilities.impl;
 
 import me.ratatamakata.spellbreak.Spellbreak;
 import me.ratatamakata.spellbreak.abilities.Ability;
+import org.bukkit.ChatColor;
+import org.bukkit.Color;
+import org.bukkit.Location;
+import org.bukkit.Particle;
+import org.bukkit.Sound;
+import org.bukkit.World;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.entity.Player;
 import me.ratatamakata.spellbreak.level.SpellLevel;
@@ -64,7 +70,7 @@ public class WardingSigilAbility implements Ability {
     @Override
     public void activate(Player player) {
         World world = player.getWorld();
-        
+
         SpellLevel sl = Spellbreak.getInstance().getLevelManager().getSpellLevel(
                 player.getUniqueId(),
                 Spellbreak.getInstance().getPlayerDataManager().getPlayerClass(player.getUniqueId()),
@@ -72,6 +78,7 @@ public class WardingSigilAbility implements Ability {
         );
         int adjustedShields = Math.max(1, (int)Math.round(numberOfShields * sl.getDamageMultiplier()));
         int adjustedDuration = (int)(shieldDuration * sl.getDurationMultiplier());
+        final int slLevel = sl.getLevel(); // capture for use in inner class
 
         // Play activation sound
         world.playSound(player.getLocation(), Sound.BLOCK_ENCHANTMENT_TABLE_USE, 1.0f, 1.2f);
@@ -168,7 +175,7 @@ public class WardingSigilAbility implements Ability {
                     );
                 }
                 
-                if (sl.getLevel() >= 3) {
+                if (slLevel >= 3) {
                     center.getWorld().spawnParticle(Particle.CRIT, center, 2, 0.1, 0.1, 0.1, 0.05);
                 }
             }
