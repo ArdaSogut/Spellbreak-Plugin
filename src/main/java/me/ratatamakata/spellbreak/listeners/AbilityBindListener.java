@@ -98,9 +98,15 @@ public class AbilityBindListener implements Listener {
         // --- Upgrade Buttons (Row 2: 18-26) ---
         if (raw >= 18 && raw < 27) {
             ItemStack spellItem = event.getInventory().getItem(raw - 9);
-            if (spellItem == null || !spellItem.hasItemMeta()) return;
+            if (spellItem == null || !spellItem.hasItemMeta()) {
+                player.sendMessage(ChatColor.RED + "Debug: spellItem is null or has no meta at slot " + (raw - 9));
+                return;
+            }
             String abilityName = parseAbilityName(spellItem);
-            if (abilityName == null) return;
+            if (abilityName == null) {
+                player.sendMessage(ChatColor.RED + "Debug: parseAbilityName returned null");
+                return;
+            }
 
             upgradeSpell(player, abilityName);
             refreshAll(player, event);
@@ -110,9 +116,15 @@ public class AbilityBindListener implements Listener {
         // --- Downgrade Buttons (Row 3: 27-35) ---
         if (raw >= 27 && raw < 36) {
             ItemStack spellItem = event.getInventory().getItem(raw - 18);
-            if (spellItem == null || !spellItem.hasItemMeta()) return;
+            if (spellItem == null || !spellItem.hasItemMeta()) {
+                player.sendMessage(ChatColor.RED + "Debug: spellItem is null or has no meta at slot " + (raw - 18));
+                return;
+            }
             String abilityName = parseAbilityName(spellItem);
-            if (abilityName == null) return;
+            if (abilityName == null) {
+                player.sendMessage(ChatColor.RED + "Debug: parseAbilityName returned null");
+                return;
+            }
 
             downgradeSpell(player, abilityName);
             refreshAll(player, event);
