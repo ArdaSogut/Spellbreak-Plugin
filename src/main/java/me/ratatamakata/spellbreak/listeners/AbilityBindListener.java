@@ -14,7 +14,7 @@ import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 import me.ratatamakata.spellbreak.level.SpellLevel;
 import me.ratatamakata.spellbreak.level.PlayerLevel;
-import org.bukkit.inventory.meta.ItemMeta;
+import org.bukkit.event.inventory.ClickType;
 
 import java.util.HashMap;
 import java.util.List;
