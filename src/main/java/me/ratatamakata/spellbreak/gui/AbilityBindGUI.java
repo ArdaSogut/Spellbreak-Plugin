@@ -23,9 +23,9 @@ import java.util.List;
  *
  * Layout (54-slot chest):
  *   Row 0  – class info header spanning centre + border panes
- *   Row 1  – up to 6 ability items (columns 1-6, with lore = spell level + description)
- *   Row 2  – (overflow abilities if class has more than 6 – columns 0-8)
- *   Row 3  – separator
+ *   Row 1  – up to 9 ability items
+ *   Row 2  – Upgrade buttons (+ Green Wool) directly below abilities
+ *   Row 3  – Downgrade buttons (- Red Wool) directly below upgrade buttons
  *   Row 4  – 9 hotbar-binding slots (columns 0-8)
  *   Row 5  – bottom border + BACK button (slot 49)
  *
@@ -33,6 +33,8 @@ import java.util.List;
  *   Left-click an ability → binds it to the slot currently highlighted in row 4
  *   Left-click a binding slot → highlights it (select target slot)
  *   Right-click a binding slot → clears that binding
+ *   Click Green Wool → Upgrade Spell Level
+ *   Click Red Wool → Downgrade Spell Level
  *   Click slot 49 (BACK) → return to CharacterSelectGUI
  */
 public class AbilityBindGUI {
@@ -48,9 +50,8 @@ public class AbilityBindGUI {
     }
 
     // Inventory slot layout helpers
-    /** Ability item positions: rows 1-2, all 9 columns. */
-    private static final int ABILITY_ROW_1_START = 9;   // row 1
-    private static final int ABILITY_ROW_2_START = 18;  // row 2 (overflow)
+    /** Ability item positions: row 1. */
+    private static final int ABILITY_ROW_START = 9;   // row 1
     /** Binding slot positions: row 4 (cols 0-8 = slots 36-44). */
     public static final int BIND_SLOT_START = 36;
     /** Back / separator / indicator positions. */
@@ -77,22 +78,21 @@ public class AbilityBindGUI {
             inv.setItem(i, border);       // row 0
             inv.setItem(45 + i, border);  // row 5
         }
-        // Row 3 separator
-        for (int i = 27; i < 36; i++) inv.setItem(i, border);
-
-        // --- Back button ---
-        inv.setItem(BACK_SLOT, makeBackButton());
-
-        // --- Class info item (row 0, slot 4) ---
-        inv.setItem(4, makeClassInfoItem(player, cls, activeIdx));
-
-        // --- Ability items ---
+        // --- Ability items and Upgrade/Downgrade Buttons ---
         List<String> abilityNames = plugin.getSpellClassManager().getClassAbilities(cls);
         for (int i = 0; i < abilityNames.size(); i++) {
+            if (i >= 9) break; // Maximum 9 abilities supported in this layout
             String abilityName = abilityNames.get(i);
-            int invSlot = (i < 9) ? ABILITY_ROW_1_START + i : ABILITY_ROW_2_START + (i - 9);
-            if (invSlot >= 27) break; // safety – don't run into separator row
+            int invSlot = ABILITY_ROW_START + i;
+            
+            // The spell icon itself
             inv.setItem(invSlot, makeAbilityItem(player, cls, abilityName, slot));
+            
+            // The UPGRADE button (Green Wool) directly below it
+            inv.setItem(invSlot + 9, makeUpgradeButton(abilityName));
+            
+            // The DOWNGRADE button (Red Wool) directly below the upgrade button
+            inv.setItem(invSlot + 18, makeDowngradeButton(abilityName));
         }
 
         // --- Binding slots (row 4) ---
@@ -122,6 +122,32 @@ public class AbilityBindGUI {
         meta.setDisplayName(ChatColor.YELLOW + "" + ChatColor.BOLD + "◀ Back");
         List<String> lore = new ArrayList<>();
         lore.add(ChatColor.GRAY + "Return to character select.");
+        meta.setLore(lore);
+        item.setItemMeta(meta);
+        return item;
+    }
+
+    private static ItemStack makeUpgradeButton(String abilityName) {
+        ItemStack item = new ItemStack(Material.GREEN_WOOL);
+        ItemMeta meta = item.getItemMeta();
+        meta.setDisplayName(ChatColor.GREEN + "" + ChatColor.BOLD + "Increase Level");
+        List<String> lore = new ArrayList<>();
+        lore.add(ChatColor.GRAY + "Upgrade " + ChatColor.WHITE + abilityName);
+        lore.add("");
+        lore.add(ChatColor.GREEN + "Click to spend 1 Skill Point");
+        meta.setLore(lore);
+        item.setItemMeta(meta);
+        return item;
+    }
+
+    private static ItemStack makeDowngradeButton(String abilityName) {
+        ItemStack item = new ItemStack(Material.RED_WOOL);
+        ItemMeta meta = item.getItemMeta();
+        meta.setDisplayName(ChatColor.RED + "" + ChatColor.BOLD + "Decrease Level");
+        List<String> lore = new ArrayList<>();
+        lore.add(ChatColor.GRAY + "Downgrade " + ChatColor.WHITE + abilityName);
+        lore.add("");
+        lore.add(ChatColor.RED + "Click to refund 1 Skill Point");
         meta.setLore(lore);
         item.setItemMeta(meta);
         return item;
@@ -207,9 +233,6 @@ public class AbilityBindGUI {
         lore.add("");
         lore.add(ChatColor.YELLOW + "Left-click a binding slot below,");
         lore.add(ChatColor.YELLOW + "then click here to assign.");
-        lore.add("");
-        lore.add(ChatColor.AQUA + "Right-Click to " + ChatColor.BOLD + "Upgrade" + ChatColor.AQUA + " Spell");
-        lore.add(ChatColor.RED + "Middle-Click to " + ChatColor.BOLD + "Downgrade" + ChatColor.RED + " Spell");
 
         meta.setLore(lore);
 

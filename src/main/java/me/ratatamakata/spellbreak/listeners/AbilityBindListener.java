@@ -72,51 +72,66 @@ public class AbilityBindListener implements Listener {
             return;
         }
 
-        // --- Ability items (rows 1 and 2) ---
-        if ((raw >= 9 && raw < 18) || (raw >= 18 && raw < 27)) {
-            if (event.getClick() != org.bukkit.event.inventory.ClickType.LEFT && 
-                event.getClick() != org.bukkit.event.inventory.ClickType.RIGHT && 
-                event.getClick() != org.bukkit.event.inventory.ClickType.MIDDLE) return;
+        // --- Ability items (Row 1: 9-17) ---
+        if (raw >= 9 && raw < 18) {
+            if (event.getClick() != org.bukkit.event.inventory.ClickType.LEFT) return;
+
+            Integer target = selectedSlot.get(uuid);
+            if (target == null) {
+                player.sendMessage(ChatColor.RED + "⚠ First select a binding slot (click a green slot in row 5).");
+                player.playSound(player.getLocation(), Sound.ENTITY_VILLAGER_NO, 0.8f, 1f);
+                return;
+            }
 
             // Read ability name from item display name
             ItemStack clicked = event.getCurrentItem();
             if (clicked == null || !clicked.hasItemMeta()) return;
-            ItemMeta meta = clicked.getItemMeta();
-            if (!meta.hasDisplayName()) return;
+            String abilityName = parseAbilityName(clicked);
+            if (abilityName == null) return;
 
-            // Strip chat-colour codes to get the raw name
-            String rawName = ChatColor.stripColor(meta.getDisplayName());
-            if (rawName == null || rawName.isBlank()) return;
+            bindAbility(player, target, abilityName);
+            selectedSlot.remove(uuid); // deselect after binding
+            refreshAll(player, event);
+            return;
+        }
 
-            // Trim potential number prefix (shouldn't be there, but safety)
-            String abilityName = rawName.trim();
+        // --- Upgrade Buttons (Row 2: 18-26) ---
+        if (raw >= 18 && raw < 27) {
+            ItemStack spellItem = event.getInventory().getItem(raw - 9);
+            if (spellItem == null || !spellItem.hasItemMeta()) return;
+            String abilityName = parseAbilityName(spellItem);
+            if (abilityName == null) return;
 
-            if (event.getClick() == org.bukkit.event.inventory.ClickType.LEFT) {
-                Integer target = selectedSlot.get(uuid);
-                if (target == null) {
-                    player.sendMessage(ChatColor.RED + "⚠ First select a binding slot (click a green slot in row 5).");
-                    player.playSound(player.getLocation(), Sound.ENTITY_VILLAGER_NO, 0.8f, 1f);
-                    return;
-                }
-                bindAbility(player, target, abilityName);
-                selectedSlot.remove(uuid); // deselect after binding
-                refreshAll(player, event);
-                return;
-            } else if (event.getClick() == org.bukkit.event.inventory.ClickType.RIGHT) {
-                upgradeSpell(player, abilityName);
-                refreshAll(player, event);
-                return;
-            } else if (event.getClick() == org.bukkit.event.inventory.ClickType.MIDDLE) {
-                downgradeSpell(player, abilityName);
-                refreshAll(player, event);
-                return;
-            }
+            upgradeSpell(player, abilityName);
+            refreshAll(player, event);
+            return;
+        }
+
+        // --- Downgrade Buttons (Row 3: 27-35) ---
+        if (raw >= 27 && raw < 36) {
+            ItemStack spellItem = event.getInventory().getItem(raw - 18);
+            if (spellItem == null || !spellItem.hasItemMeta()) return;
+            String abilityName = parseAbilityName(spellItem);
+            if (abilityName == null) return;
+
+            downgradeSpell(player, abilityName);
+            refreshAll(player, event);
+            return;
         }
     }
 
     // -------------------------------------------------------------------------
     // Helpers
     // -------------------------------------------------------------------------
+
+    private String parseAbilityName(ItemStack item) {
+        if (item == null || !item.hasItemMeta()) return null;
+        ItemMeta meta = item.getItemMeta();
+        if (!meta.hasDisplayName()) return null;
+        String rawName = ChatColor.stripColor(meta.getDisplayName());
+        if (rawName == null || rawName.isBlank()) return null;
+        return rawName.trim();
+    }
 
     private void bindAbility(Player player, int hotbarSlot, String abilityName) {
         UUID uuid = player.getUniqueId();
@@ -270,12 +285,12 @@ public class AbilityBindListener implements Listener {
                     AbilityBindGUI.makeBindingSlotItem(i, bindings[i]));
         }
 
-        // Refresh ability items
+        // Refresh ability items (only row 1 needs update)
         List<String> abilityNames = plugin.getSpellClassManager().getClassAbilities(cls);
         for (int i = 0; i < abilityNames.size(); i++) {
+            if (i >= 9) break;
             String abilityName = abilityNames.get(i);
-            int invSlot = (i < 9) ? 9 + i : 18 + (i - 9);
-            if (invSlot >= 27) break;
+            int invSlot = 9 + i;
             event.getInventory().setItem(invSlot, AbilityBindGUI.makeAbilityItem(player, cls, abilityName, slot));
         }
     }
