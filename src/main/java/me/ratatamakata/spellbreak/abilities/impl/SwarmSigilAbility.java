@@ -226,7 +226,7 @@ public class SwarmSigilAbility implements Ability {
             LivingEntity nearest = null;
             double min = seekRadius;
             for (Entity e : owner.getWorld().getNearbyEntities(location, seekRadius, seekRadius, seekRadius)) {
-                if (!(e instanceof LivingEntity) || e.equals(owner)) continue;
+                if (!(e instanceof LivingEntity) || e instanceof ArmorStand || e.equals(owner)) continue;
                 double dist = location.distance(((LivingEntity) e).getLocation());
                 if (dist < min) { min = dist; nearest = (LivingEntity) e; }
             }
