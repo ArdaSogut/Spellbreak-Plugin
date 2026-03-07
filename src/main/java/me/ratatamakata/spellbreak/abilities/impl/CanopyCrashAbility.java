@@ -197,7 +197,7 @@ public class CanopyCrashAbility implements Ability {
     @Override public boolean isTriggerAction(org.bukkit.event.block.Action action) { return false; }
     @Override public boolean isSuccessful() { return true; }
     @Override public int getCurrentCharges(Player player) { return 0; }
-    @Override public int getMaxCharges() { return 0; }
+    @Override public int getMaxCharges(Player player) { return 0; }
     @Override public int getChargeRegenTime() { return 0; }
     @Override
     public String getDeathMessage(String victim, String caster, String ability) {

@@ -58,9 +58,10 @@ public interface Ability {
 
     /**
      * Gets the maximum number of charges for this ability.
+     * @param player The player to check.
      * @return The maximum charges, or 0 or -1 if the ability doesn't use charges.
      */
-    default int getMaxCharges() {
+    default int getMaxCharges(Player player) {
         return 0; // Default: No charges
     }
 

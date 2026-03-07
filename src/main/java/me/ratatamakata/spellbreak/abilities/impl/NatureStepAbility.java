@@ -18,8 +18,6 @@ import org.bukkit.event.block.Action;
 import org.bukkit.scheduler.BukkitRunnable;
 import org.bukkit.scheduler.BukkitTask;
 import org.bukkit.util.Vector;
-import net.md_5.bungee.api.ChatMessageType;
-import net.md_5.bungee.api.chat.TextComponent;
 import org.bukkit.entity.LivingEntity;
 
 import java.util.Arrays;
@@ -28,7 +26,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Random;
 import java.util.UUID;
-import java.util.stream.Collectors; // Added for orb detonation nearby entities
+
 
 public class NatureStepAbility implements Ability {
 
@@ -76,8 +74,16 @@ public class NatureStepAbility implements Ability {
     }
 
     @Override
-    public int getMaxCharges() {
-        return maxCharges;
+    public int getMaxCharges(Player player) {
+        return getMaxCharges(player.getUniqueId());
+    }
+    
+    private int getMaxCharges(UUID playerUUID) {
+        SpellLevel sl = Spellbreak.getInstance().getLevelManager().getSpellLevel(
+                playerUUID, 
+                Spellbreak.getInstance().getPlayerDataManager().getPlayerClass(playerUUID), 
+                getName());
+        return Math.max(1, (int)Math.round(maxCharges * sl.getDamageMultiplier()));
     }
 
     @Override
@@ -415,15 +421,15 @@ public class NatureStepAbility implements Ability {
     }
 
     private int getCharges(UUID playerUUID) {
-        return playerCharges.computeIfAbsent(playerUUID, k -> maxCharges);
+        return playerCharges.computeIfAbsent(playerUUID, k -> getMaxCharges(playerUUID));
     }
 
     private void consumeCharge(UUID playerUUID) {
         int current = getCharges(playerUUID);
         if (current > 0) {
             playerCharges.put(playerUUID, current - 1);
-            // If we just used a charge and were at max, start the regen timer
-            if (current == maxCharges) {
+            // Fix: Start regen task if it's not already running and we are now below max
+            if (chargeRegenTasks.get(playerUUID) == null || chargeRegenTasks.get(playerUUID).isCancelled()) {
                 startRegenerationTask(playerUUID);
             }
         } 
@@ -433,7 +439,7 @@ public class NatureStepAbility implements Ability {
     
     private void addCharge(UUID playerUUID) {
          int current = getCharges(playerUUID);
-         if (current < maxCharges) {
+         if (current < getMaxCharges(playerUUID)) {
              playerCharges.put(playerUUID, current + 1);
          }
         // Update HUD if possible
@@ -450,10 +456,11 @@ public class NatureStepAbility implements Ability {
             @Override
             public void run() {
                 int current = getCharges(playerUUID);
-                if (current < maxCharges) {
+                int mCharges = getMaxCharges(playerUUID);
+                if (current < mCharges) {
                     addCharge(playerUUID);
                     // If not yet max charges, keep the timer running for the next charge
-                    if (getCharges(playerUUID) < maxCharges) {
+                    if (getCharges(playerUUID) < mCharges) {
                         // Task will continue running
                     } else {
                         // Reached max charges, stop this regen task

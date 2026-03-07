@@ -107,7 +107,7 @@ public class HUDManager {
 
         String displayName = ability.getName();
         int globalCooldown = cooldownManager.getRemainingCooldown(player, displayName);
-        int maxCharges = ability.getMaxCharges();
+        int maxCharges = ability.getMaxCharges(player);
 
         String suffix = "";
         String color = ChatColor.GREEN.toString();

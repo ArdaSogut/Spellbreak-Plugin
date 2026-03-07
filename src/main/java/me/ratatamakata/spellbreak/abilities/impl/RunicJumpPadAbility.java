@@ -64,8 +64,8 @@ public class RunicJumpPadAbility implements Ability {
     }
 
     @Override
-    public int getMaxCharges() {
-        return maxCharges;
+    public int getMaxCharges(Player player) {
+        return getMaxCharges(player.getUniqueId());
     }
 
     @Override
@@ -391,8 +391,8 @@ public class RunicJumpPadAbility implements Ability {
         int current = getCharges(playerUUID);
         if (current > 0) {
             playerCharges.put(playerUUID, current - 1);
-            // If we just used a charge and were at max, start the regen timer
-            if (current == getMaxCharges(playerUUID)) {
+            // Fix: Start regen task if it's not already running and we are now below max
+            if (chargeRegenTasks.get(playerUUID) == null || chargeRegenTasks.get(playerUUID).isCancelled()) {
                 startRegenerationTask(playerUUID);
             }
         }
