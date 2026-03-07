@@ -1,0 +1,54 @@
+{
+  "credit": "Spellbreak Generator",
+  "texture_size": [16, 16],
+  "textures": {
+    "0": "block/anvil_base",
+    "1": "block/iron_block",
+    "2": "block/dispenser_front"
+  },
+  "elements": [
+    {
+      "name": "Base",
+      "from": [2, 0, 2],
+      "to": [14, 2, 14],
+      "faces": {
+        "north": {"uv": [2, 14, 14, 16], "texture": "#0"},
+        "east": {"uv": [2, 14, 14, 16], "texture": "#0"},
+        "south": {"uv": [2, 14, 14, 16], "texture": "#0"},
+        "west": {"uv": [2, 14, 14, 16], "texture": "#0"},
+        "up": {"uv": [2, 2, 14, 14], "texture": "#0"},
+        "down": {"uv": [2, 2, 14, 14], "texture": "#0"}
+      }
+    },
+    {
+      "name": "Body",
+      "from": [4, 2, 4],
+      "to": [12, 10, 12],
+      "faces": {
+        "north": {"uv": [4, 6, 12, 14], "texture": "#1"},
+        "east": {"uv": [4, 6, 12, 14], "texture": "#1"},
+        "south": {"uv": [4, 6, 12, 14], "texture": "#1"},
+        "west": {"uv": [4, 6, 12, 14], "texture": "#1"},
+        "up": {"uv": [4, 4, 12, 12], "texture": "#1"}
+      }
+    },
+    {
+      "name": "Barrel",
+      "from": [5, 4, -4],
+      "to": [11, 8, 4],
+      "faces": {
+        "north": {"uv": [5, 5, 11, 11], "texture": "#2"},
+        "east": {"uv": [0, 8, 8, 12], "texture": "#1"},
+        "south": {"uv": [5, 5, 11, 11], "texture": "#1"},
+        "west": {"uv": [0, 8, 8, 12], "texture": "#1"},
+        "up": {"uv": [5, 4, 11, 12], "texture": "#1"},
+        "down": {"uv": [5, 4, 11, 12], "texture": "#1"}
+      }
+    }
+  ],
+  "display": {
+    "thirdperson_righthand": { "rotation": [75, 45, 0], "translation": [0, 2.5, 0], "scale": [0.375, 0.375, 0.375] },
+    "head": { "translation": [0, 14.5, 0], "scale": [1.5, 1.5, 1.5] },
+    "ground": { "translation": [0, 3, 0], "scale": [0.5, 0.5, 0.5] }
+  }
+}
