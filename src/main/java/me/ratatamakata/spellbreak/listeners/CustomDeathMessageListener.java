@@ -151,39 +151,72 @@ public class CustomDeathMessageListener implements Listener {
 
         Player killer = victim.getKiller();
         if (killer == null && damageInfo != null && damageInfo.getCasterName() != null) {
-            killer = Bukkit.getPlayer(damageInfo.getCasterName());
+            killer = Bukkit.getPlayerExact(damageInfo.getCasterName());
+        }
+
+        java.util.List<me.ratatamakata.spellbreak.managers.PvPManager.DamageRecord> records = plugin.getPvpManager().getRecentDamage(victim);
+
+        if (killer == null && !records.isEmpty()) {
+            String lastAttackerName = records.get(records.size() - 1).attackerName;
+            Player possibleKiller = Bukkit.getPlayerExact(lastAttackerName);
+            if (possibleKiller != null) killer = possibleKiller;
         }
 
         if (killer != null && killer != victim) {
             // Kill Streak Check
             plugin.getPvpManager().handleKill(killer, victim);
 
-            // Notify killer
-            killer.sendMessage(Component.text("You eliminated " + victim.getName() + "!").color(net.kyori.adventure.text.format.NamedTextColor.GREEN));
+            // Notify killer UI
+            killer.sendMessage(Component.text("--------------------------------------------------").color(net.kyori.adventure.text.format.NamedTextColor.DARK_GRAY).decoration(net.kyori.adventure.text.format.TextDecoration.STRIKETHROUGH, true));
+            killer.sendMessage(Component.text("  🗡 You eliminated ").color(net.kyori.adventure.text.format.NamedTextColor.YELLOW)
+                .append(Component.text(victim.getName()).color(net.kyori.adventure.text.format.NamedTextColor.RED))
+                .append(Component.text("!").color(net.kyori.adventure.text.format.NamedTextColor.YELLOW)));
+            killer.sendMessage(Component.text("--------------------------------------------------").color(net.kyori.adventure.text.format.NamedTextColor.DARK_GRAY).decoration(net.kyori.adventure.text.format.TextDecoration.STRIKETHROUGH, true));
             killer.playSound(killer.getLocation(), org.bukkit.Sound.ENTITY_EXPERIENCE_ORB_PICKUP, 1.0f, 1.0f);
-
-            // Death Recap for Victim
-            victim.sendMessage(Component.text("☠ ").color(net.kyori.adventure.text.format.NamedTextColor.DARK_RED)
-                .append(Component.text("You were eliminated by " + killer.getName()).color(net.kyori.adventure.text.format.NamedTextColor.RED)));
-            victim.sendMessage(Component.text("Damage Breakdown (Last 30s):").color(net.kyori.adventure.text.format.NamedTextColor.GRAY));
-            
-            java.util.List<me.ratatamakata.spellbreak.managers.PvPManager.DamageRecord> records = plugin.getPvpManager().getRecentDamage(victim);
-            if (records.isEmpty()) {
-                victim.sendMessage(Component.text(" - No recent damage recorded.").color(net.kyori.adventure.text.format.NamedTextColor.DARK_GRAY));
-            } else {
-                java.util.Map<String, Double> damageByAbility = new java.util.HashMap<>();
-                for (me.ratatamakata.spellbreak.managers.PvPManager.DamageRecord rec : records) {
-                    damageByAbility.put(rec.abilityName, damageByAbility.getOrDefault(rec.abilityName, 0.0) + rec.damage);
-                }
-                for (java.util.Map.Entry<String, Double> entry : damageByAbility.entrySet()) {
-                    victim.sendMessage(Component.text(" - ").color(net.kyori.adventure.text.format.NamedTextColor.GRAY)
-                        .append(Component.text(entry.getKey() + ": ").color(net.kyori.adventure.text.format.NamedTextColor.YELLOW))
-                        .append(Component.text(String.format("%.1f", entry.getValue())).color(net.kyori.adventure.text.format.NamedTextColor.RED)));
-                }
-            }
         } else {
             // If they died to environment, clear streaks anyway
             plugin.getPvpManager().resetStreak(victim);
+        }
+
+        // Always show recap if they died and had recent damage.
+        if (!records.isEmpty()) {
+            victim.sendMessage(Component.text("--------------------------------------------------").color(net.kyori.adventure.text.format.NamedTextColor.DARK_GRAY).decoration(net.kyori.adventure.text.format.TextDecoration.STRIKETHROUGH, true));
+            if (killer != null) {
+                victim.sendMessage(Component.text("  ☠ You were eliminated by ").color(net.kyori.adventure.text.format.NamedTextColor.RED)
+                    .append(Component.text(killer.getName()).color(net.kyori.adventure.text.format.NamedTextColor.GOLD)));
+
+                // Health left
+                double healthLeft = killer.getHealth();
+                victim.sendMessage(Component.text("  ❤ They survived with ").color(net.kyori.adventure.text.format.NamedTextColor.GRAY)
+                    .append(Component.text(String.format("%.1f", healthLeft)).color(net.kyori.adventure.text.format.NamedTextColor.RED))
+                    .append(Component.text(" HP").color(net.kyori.adventure.text.format.NamedTextColor.GRAY)));
+            } else {
+                victim.sendMessage(Component.text("  ☠ You died.").color(net.kyori.adventure.text.format.NamedTextColor.RED));
+            }
+
+            victim.sendMessage(Component.empty());
+            victim.sendMessage(Component.text("  Damage Breakdown (Last 30s):").color(net.kyori.adventure.text.format.NamedTextColor.GRAY));
+
+            java.util.Map<String, Double> damageByAbility = new java.util.HashMap<>();
+            double totalDamage = 0;
+            for (me.ratatamakata.spellbreak.managers.PvPManager.DamageRecord rec : records) {
+                damageByAbility.put(rec.abilityName, damageByAbility.getOrDefault(rec.abilityName, 0.0) + rec.damage);
+                totalDamage += rec.damage;
+            }
+
+            // Sort by highest damage
+            java.util.List<java.util.Map.Entry<String, Double>> sortedEntries = new java.util.ArrayList<>(damageByAbility.entrySet());
+            sortedEntries.sort((a, b) -> b.getValue().compareTo(a.getValue()));
+
+            for (java.util.Map.Entry<String, Double> entry : sortedEntries) {
+                int percentage = totalDamage > 0 ? (int) Math.round((entry.getValue() / totalDamage) * 100) : 0;
+                victim.sendMessage(Component.text("  ▪ ").color(net.kyori.adventure.text.format.NamedTextColor.DARK_GRAY)
+                    .append(Component.text(entry.getKey() + " ").color(net.kyori.adventure.text.format.NamedTextColor.YELLOW))
+                    .append(Component.text("- ").color(net.kyori.adventure.text.format.NamedTextColor.GRAY))
+                    .append(Component.text(String.format("%.1f", entry.getValue())).color(net.kyori.adventure.text.format.NamedTextColor.RED))
+                    .append(Component.text(" damage (" + percentage + "%)").color(net.kyori.adventure.text.format.NamedTextColor.GRAY)));
+            }
+            victim.sendMessage(Component.text("--------------------------------------------------").color(net.kyori.adventure.text.format.NamedTextColor.DARK_GRAY).decoration(net.kyori.adventure.text.format.TextDecoration.STRIKETHROUGH, true));
         }
 
         if (damageInfo != null) {
