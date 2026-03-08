@@ -42,6 +42,8 @@ public final class Spellbreak extends JavaPlugin implements Listener {
     private IronwoodShellAbility ironwoodShellAbilityInstance;
     private TeamManager teamManager;
     private LevelManager levelManager;
+    private PvPManager pvpManager;
+    private ArenaManager arenaManager;
 
     // Cooldown Bypass Feature
     public static Set<UUID> playersWithCooldownBypass = new HashSet<>();
@@ -72,6 +74,8 @@ public final class Spellbreak extends JavaPlugin implements Listener {
         ironwoodShellAbilityInstance = new IronwoodShellAbility();
         teamManager = new TeamManager(this);
         levelManager = new LevelManager(this);
+        pvpManager = new PvPManager(this);
+        arenaManager = new ArenaManager(this);
         abilityManager.loadAbilities();
         spellClassManager.loadClasses();
         getLevelManager().loadAllPlayerLevels();
@@ -154,11 +158,13 @@ public final class Spellbreak extends JavaPlugin implements Listener {
         getCommand("class").setTabCompleter(new TabComplete());
         getCommand("spellbreakcooldownreset").setExecutor(new CooldownResetCommand(this));
         getCommand("testdeath").setExecutor(new TestDeathMessageCommand());
+        getCommand("testpvp").setExecutor(new TestPvPCommand(this));
         PresetCommand presetExecutor = new PresetCommand();
         getCommand("preset").setExecutor(presetExecutor);
         getCommand("preset").setTabCompleter(presetExecutor);
         this.getCommand("team").setExecutor(new TeamCommand(this));
         getCommand("level").setExecutor(new LevelCommand(this));
+        getCommand("pvp").setExecutor(new ArenaCommand(this));
 
         // Scoreboard HUD Updater Task
         new BukkitRunnable() {
@@ -203,6 +209,8 @@ public final class Spellbreak extends JavaPlugin implements Listener {
     public ManaSystem getManaSystem() { return manaSystem; }
     public StunHandler getStunHandler() {return stunHandler;}
     public TeamManager getTeamManager() { return teamManager; }
+    public PvPManager getPvpManager() { return pvpManager; }
+    public ArenaManager getArenaManager() { return arenaManager; }
     /**
      * Access the ability damage utility from abilities
      */

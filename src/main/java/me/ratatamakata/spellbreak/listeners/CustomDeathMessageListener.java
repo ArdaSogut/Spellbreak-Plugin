@@ -13,6 +13,7 @@ import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.entity.PlayerDeathEvent;
 import org.bukkit.metadata.FixedMetadataValue;
 import org.bukkit.metadata.MetadataValue;
+import net.kyori.adventure.text.Component;
 
 import java.util.List;
 import java.util.UUID;
@@ -92,7 +93,15 @@ public class CustomDeathMessageListener implements Listener {
             casterNameForInfo = caster.getName();
             attackerNameDisplay = caster.getName();
             abilityName = getMetadataString(caster, METADATA_KEY_ABILITY_NAME);
+            if (abilityName == null) abilityName = "Melee"; // Default to Melee
             subAbilityName = getMetadataString(caster, METADATA_KEY_SUB_ABILITY_NAME);
+        }
+
+        // Record Combat
+        if (caster != null && caster != victim) {
+            plugin.getPvpManager().markInCombat(victim, caster);
+            String finalAbility = abilityName != null ? abilityName : "Unknown";
+            plugin.getPvpManager().addDamageRecord(victim, attackerNameDisplay, finalAbility, event.getFinalDamage());
         }
 
         // If we found ability information, create a LastDamageInfo
@@ -140,10 +149,47 @@ public class CustomDeathMessageListener implements Listener {
 
         victim.removeMetadata(METADATA_KEY_LAST_DAMAGE_INFO, plugin);
 
+        Player killer = victim.getKiller();
+        if (killer == null && damageInfo != null && damageInfo.getCasterName() != null) {
+            killer = Bukkit.getPlayer(damageInfo.getCasterName());
+        }
+
+        if (killer != null && killer != victim) {
+            // Kill Streak Check
+            plugin.getPvpManager().handleKill(killer, victim);
+
+            // Notify killer
+            killer.sendMessage(Component.text("You eliminated " + victim.getName() + "!").color(net.kyori.adventure.text.format.NamedTextColor.GREEN));
+            killer.playSound(killer.getLocation(), org.bukkit.Sound.ENTITY_EXPERIENCE_ORB_PICKUP, 1.0f, 1.0f);
+
+            // Death Recap for Victim
+            victim.sendMessage(Component.text("☠ ").color(net.kyori.adventure.text.format.NamedTextColor.DARK_RED)
+                .append(Component.text("You were eliminated by " + killer.getName()).color(net.kyori.adventure.text.format.NamedTextColor.RED)));
+            victim.sendMessage(Component.text("Damage Breakdown (Last 30s):").color(net.kyori.adventure.text.format.NamedTextColor.GRAY));
+            
+            java.util.List<me.ratatamakata.spellbreak.managers.PvPManager.DamageRecord> records = plugin.getPvpManager().getRecentDamage(victim);
+            if (records.isEmpty()) {
+                victim.sendMessage(Component.text(" - No recent damage recorded.").color(net.kyori.adventure.text.format.NamedTextColor.DARK_GRAY));
+            } else {
+                java.util.Map<String, Double> damageByAbility = new java.util.HashMap<>();
+                for (me.ratatamakata.spellbreak.managers.PvPManager.DamageRecord rec : records) {
+                    damageByAbility.put(rec.abilityName, damageByAbility.getOrDefault(rec.abilityName, 0.0) + rec.damage);
+                }
+                for (java.util.Map.Entry<String, Double> entry : damageByAbility.entrySet()) {
+                    victim.sendMessage(Component.text(" - ").color(net.kyori.adventure.text.format.NamedTextColor.GRAY)
+                        .append(Component.text(entry.getKey() + ": ").color(net.kyori.adventure.text.format.NamedTextColor.YELLOW))
+                        .append(Component.text(String.format("%.1f", entry.getValue())).color(net.kyori.adventure.text.format.NamedTextColor.RED)));
+                }
+            }
+        } else {
+            // If they died to environment, clear streaks anyway
+            plugin.getPvpManager().resetStreak(victim);
+        }
+
         if (damageInfo != null) {
             String message = damageInfo.getFormattedDeathMessage();
             if (message != null) {
-                event.setDeathMessage(message);
+                event.deathMessage(Component.text(message));
             }
         }
     }

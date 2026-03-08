@@ -20,6 +20,10 @@ public class LastDamageInfo {
         this.bySummon = bySummon;
     }
 
+    public String getCasterName() {
+        return casterName;
+    }
+
     public String getFormattedDeathMessage() {
         // If it's a minion kill, return null to use default death message
         if (bySummon) {

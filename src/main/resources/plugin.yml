@@ -15,6 +15,9 @@ commands:
   testdeath:
     description: Test death messages for abilities
     usage: /testdeath <ability> [target]
+  testpvp:
+    description: Test PvP utilities (damage, streaks, kill recap) without another player
+    usage: /testpvp <damage|fakestreak|fakekill|die>
   spellbreakcooldownreset:
     description: Reset cooldowns
     usage: /spellbreakcooldownreset
@@ -42,6 +45,9 @@ commands:
     permission: spellbreak.reload
     permission-message: You don't have permission to reload the configuration.
     aliases: [spellbreakreload, sbreload]
+  pvp:
+    description: Arena management and starting PvP matches.
+    usage: /pvp <start|setspawn>
 
 permissions:
   spellbreak.reload:

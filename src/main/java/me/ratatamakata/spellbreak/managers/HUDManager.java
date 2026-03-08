@@ -70,6 +70,12 @@ public class HUDManager {
         obj.getScore(levelEntry).setScore(8);
         currentEntries.add(levelEntry);
 
+        if (plugin.getPvpManager().isInCombat(player)) {
+            String combatEntry = ChatColor.DARK_RED + "" + ChatColor.BOLD + "[In Combat]";
+            obj.getScore(combatEntry).setScore(7); // Show right below level
+            currentEntries.add(combatEntry);
+        }
+
         String[] abilities = playerDataManager.getBindings(player.getUniqueId());
 
         for(int i = 0; i < 9; i++) {
@@ -78,7 +84,7 @@ public class HUDManager {
             boolean isActiveSlot = (i == currentSlot);
 
             String formattedEntry = formatSlot(i + 1, ability, player, cooldownManager, isActiveSlot);
-            obj.getScore(formattedEntry).setScore(7 - i); // Adjusted score position
+            obj.getScore(formattedEntry).setScore(-1 - i); // Adjusted score position to start below combat indicator
             currentEntries.add(formattedEntry);
         }
 
