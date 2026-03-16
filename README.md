@@ -1,6 +1,6 @@
 # Spellbreak Plugin
 
-A fully custom Minecraft ability system built for **Paper 1.21+**, featuring 6 unique spell classes, 47 abilities, player levels, daily missions, team/party system, and a full scoreboard HUD.
+A fully custom Minecraft ability system built for **Paper 1.21+**, featuring 6 unique spell classes, 42 abilities, player levels, daily missions, team/party system, and a full scoreboard HUD.
 
 ## Features
 
