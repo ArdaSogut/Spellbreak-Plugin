@@ -1,4 +1,3 @@
-
 package me.ratatamakata.spellbreak.abilities.impl;
 
 import me.libraryaddict.disguise.DisguiseAPI;
@@ -12,6 +11,10 @@ import org.bukkit.*;
 import org.bukkit.Particle.DustOptions;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.entity.*;
+import org.bukkit.event.EventHandler;
+import org.bukkit.event.Listener;
+import org.bukkit.event.entity.EntityDamageByEntityEvent;
+import org.bukkit.event.entity.EntityDamageEvent;
 import org.bukkit.metadata.FixedMetadataValue;
 import org.bukkit.scheduler.BukkitRunnable;
 import org.bukkit.scheduler.BukkitTask;
@@ -19,18 +22,20 @@ import org.bukkit.util.Vector;
 
 import java.util.*;
 
-public class CloneSwarmAbility implements Ability {
+public class CloneSwarmAbility implements Ability, Listener {
     private int cooldown = 10;
     private int manaCost = 20;
     private String requiredClass = "mindshaper";
-    private int cloneCount = 4;
-    private int cloneDuration = 100; // ticks
+    private int cloneCount = 3;
+    private int cloneDuration = 80; // ticks
     private double cloneMoveSpeed = 0.4;
     private double cloneJumpForce = 0.6;
     private double maxTargetDistance = 25.0;
     private double cloneCollisionDamage = 1.0;
     private double cloneCollisionRadius = 1.5;
-    private double spawnRadius = 3.0; // NEW: radius to space clones
+    private double spawnRadius = 3.0;
+
+    private boolean isRegistered = false; // Listener kaydı kontrolü
 
     private final Map<UUID, List<CloneData>> playerClones = new HashMap<>();
 
@@ -58,12 +63,17 @@ public class CloneSwarmAbility implements Ability {
 
     @Override
     public void activate(Player player) {
-        // Get level-adjusted values
+        // Listener'ı sadece bir kez kaydet
+        if (!isRegistered) {
+            Bukkit.getPluginManager().registerEvents(this, Spellbreak.getInstance());
+            isRegistered = true;
+        }
+
         SpellLevel spellLevel = Spellbreak.getInstance().getLevelManager().getSpellLevel(player.getUniqueId(), Spellbreak.getInstance().getPlayerDataManager().getPlayerClass(player.getUniqueId()), "CloneSwarm");
 
         int adjustedCooldown = (int) (cooldown * spellLevel.getCooldownReduction());
         int adjustedManaCost = (int) (manaCost * spellLevel.getManaCostReduction());
-        int adjustedCloneCount = cloneCount + spellLevel.getLevel(); // Increase clone count based on level
+        int adjustedCloneCount = cloneCount + spellLevel.getLevel();
         double adjustedCollisionDamage = cloneCollisionDamage * spellLevel.getDamageMultiplier();
         double adjustedSpawnRadius = spawnRadius * spellLevel.getRangeMultiplier();
 
@@ -80,7 +90,6 @@ public class CloneSwarmAbility implements Ability {
         }
 
         List<CloneData> clones = new ArrayList<>();
-        // Spawn clones evenly spaced in a circle around the player
         Location origin = player.getLocation();
         for (int i = 0; i < adjustedCloneCount; i++) {
             double angle = 2 * Math.PI * i / adjustedCloneCount;
@@ -123,7 +132,7 @@ public class CloneSwarmAbility implements Ability {
         stand.setGravity(true);
         stand.setVisible(true);
         stand.setSmall(false);
-        stand.setInvulnerable(true);
+        stand.setInvulnerable(false); // DEĞİŞTİ: Hasar alabilmesi için false yapıldı
         stand.setCollidable(false);
         stand.addScoreboardTag("clone_swarm");
         stand.setMetadata("clone_owner", new FixedMetadataValue(Spellbreak.getInstance(), player.getUniqueId().toString()));
@@ -137,18 +146,20 @@ public class CloneSwarmAbility implements Ability {
         BukkitTask moveTask = new BukkitRunnable() {
             int ticksToJump = (int)(Math.random()*20)+10;
             @Override public void run() {
-                if (stand.isDead() || !target.isValid() || !player.isOnline()) cancel();
+                if (stand.isDead() || !target.isValid() || !player.isOnline()) { // stand.isDead() kontrolü listener'dan sonra task'ı durdurur
+                    cancel();
+                    return;
+                }
                 Vector dir = target.getLocation().toVector().subtract(stand.getLocation().toVector()).normalize();
                 dir.add(new Vector((Math.random()-0.5)*0.3,0,(Math.random()-0.5)*0.3)).normalize();
                 if (--ticksToJump<=0) { dir.setY(cloneJumpForce); ticksToJump = (int)(Math.random()*20)+10; }
                 stand.setVelocity(dir.multiply(cloneMoveSpeed));
                 spawnTinyParticles(stand.getLocation());
-                
-                // Level 3+: extra PORTAL trail
+
                 if (sl.getLevel() >= 3) {
                     stand.getWorld().spawnParticle(Particle.PORTAL, stand.getLocation().add(0, 1, 0), 2, 0.2, 0.2, 0.2, 0);
                 }
-                
+
                 if (stand.getLocation().distance(target.getLocation())<cloneCollisionRadius) {
                     handleCloneCollision(stand, target, player, sl, damage);
                 }
@@ -158,16 +169,44 @@ public class CloneSwarmAbility implements Ability {
         return new CloneData(stand, moveTask);
     }
 
+    // YENİ: Klon hasar aldığında çalışacak olay dinleyicisi
+    @EventHandler
+    public void onCloneDamage(EntityDamageEvent event) {
+        if (event.getEntity().getScoreboardTags().contains("clone_swarm")) {
+            event.setCancelled(true); // Standart hasar/kırılma davranışını (eşya düşürme vb.) engelle
+
+            Entity entity = event.getEntity();
+
+            // Dost ateşi kontrolü (Opsiyonel: Sahibi klonlarını öldüremesin isterseniz)
+            if (event instanceof EntityDamageByEntityEvent) {
+                EntityDamageByEntityEvent damageEvent = (EntityDamageByEntityEvent) event;
+                if (entity.hasMetadata("clone_owner")) {
+                    String ownerId = entity.getMetadata("clone_owner").get(0).asString();
+                    if (damageEvent.getDamager().getUniqueId().toString().equals(ownerId)) {
+                        return;
+                    }
+                }
+            }
+
+            // Klonu temizle ("Öldür")
+            spawnBurstParticles(entity.getLocation());
+            entity.getWorld().playSound(entity.getLocation(), Sound.ENTITY_PHANTOM_DEATH, 1.0f, 1.0f);
+
+            if (entity instanceof LivingEntity) {
+                DisguiseAPI.undisguiseToAll(entity);
+            }
+            entity.remove(); // Varlığı sil, bu işlem createCloneAt içindeki task'ı da durdurur (isDead true olur)
+        }
+    }
+
     private LivingEntity findTarget(Player player) {
         LivingEntity target = null;
         double closestDist = Double.MAX_VALUE;
 
-        // Find the closest living entity in player's line of sight
         for (Entity entity : player.getNearbyEntities(maxTargetDistance, maxTargetDistance, maxTargetDistance)) {
             if (!(entity instanceof LivingEntity livingEntity) || entity.equals(player)) continue;
             if (isCloneEntity(entity)) continue;
 
-            // Check if player is looking at entity (rough check)
             if (!isInLineOfSight(player, livingEntity)) continue;
 
             double dist = player.getLocation().distance(entity.getLocation());
@@ -183,30 +222,26 @@ public class CloneSwarmAbility implements Ability {
     private boolean isInLineOfSight(Player player, LivingEntity target) {
         Vector toTarget = target.getEyeLocation().toVector().subtract(player.getEyeLocation().toVector()).normalize();
         double dot = toTarget.dot(player.getLocation().getDirection());
-
-        // Check if the target is in a 30-degree cone of player's view
-        return dot > 0.866; // Cosine of 30 degrees is ~0.866
+        return dot > 0.866;
     }
 
+    // Bu metod activate içinde kullanılmıyor gibi görünüyor ama tutarlılık için güncellendi
     private CloneData createClone(Player player, LivingEntity target) {
-        // Create spawn location with slight random offset from player
         Location spawnLoc = player.getLocation().clone().add(
                 (Math.random() - 0.5) * 3,
                 0.5,
                 (Math.random() - 0.5) * 3
         );
 
-        // Create armor stand for the clone
         ArmorStand stand = (ArmorStand) spawnLoc.getWorld().spawnEntity(spawnLoc, EntityType.ARMOR_STAND);
         stand.setGravity(true);
         stand.setVisible(true);
         stand.setSmall(false);
-        stand.setInvulnerable(true);
+        stand.setInvulnerable(false); // DEĞİŞTİ
         stand.setCollidable(false);
         stand.addScoreboardTag("clone_swarm");
         stand.setMetadata("clone_owner", new FixedMetadataValue(Spellbreak.getInstance(), player.getUniqueId().toString()));
 
-        // Disguise the armor stand as the player
         PlayerDisguise disguise = new PlayerDisguise(player.getName());
         disguise.getWatcher().setCustomName(player.getName());
         disguise.getWatcher().setCustomNameVisible(true);
@@ -214,7 +249,6 @@ public class CloneSwarmAbility implements Ability {
 
         spawnParticles(spawnLoc);
 
-        // Create the movement task for this clone
         BukkitTask moveTask = new BukkitRunnable() {
             int jumps = 0;
             int ticksToNextJump = (int) (Math.random() * 20) + 10;
@@ -226,20 +260,10 @@ public class CloneSwarmAbility implements Ability {
                     return;
                 }
 
-                // Calculate direction to target
                 Vector toTarget = target.getLocation().toVector().subtract(stand.getLocation().toVector()).normalize();
-
-                // Add some randomness to movement
-                toTarget.add(new Vector(
-                        (Math.random() - 0.5) * 0.3,
-                        0,
-                        (Math.random() - 0.5) * 0.3
-                )).normalize();
-
-                // Set velocity towards target
+                toTarget.add(new Vector((Math.random() - 0.5) * 0.3, 0, (Math.random() - 0.5) * 0.3)).normalize();
                 Vector currentVel = stand.getVelocity();
 
-                // Jump occasionally
                 ticksToNextJump--;
                 if (ticksToNextJump <= 0) {
                     ticksToNextJump = (int) (Math.random() * 20) + 10;
@@ -247,13 +271,9 @@ public class CloneSwarmAbility implements Ability {
                     jumps++;
                 }
 
-                // Apply movement
                 stand.setVelocity(toTarget.multiply(cloneMoveSpeed));
-
-                // Create trail effect
                 spawnTinyParticles(stand.getLocation());
 
-                // Check for collision with target
                 if (stand.getLocation().distance(target.getLocation()) < cloneCollisionRadius) {
                     SpellLevel sl = Spellbreak.getInstance().getLevelManager().getSpellLevel(player.getUniqueId(), Spellbreak.getInstance().getPlayerDataManager().getPlayerClass(player.getUniqueId()), "CloneSwarm");
                     handleCloneCollision(stand, target, player, sl, cloneCollisionDamage * sl.getDamageMultiplier());
@@ -265,25 +285,20 @@ public class CloneSwarmAbility implements Ability {
     }
 
     private void handleCloneCollision(ArmorStand clone, LivingEntity target, Player owner, SpellLevel sl, double damage) {
-        // Apply damage and knockback effect
         Spellbreak.getInstance().getAbilityDamage().damage(target, damage, owner, this, null);
 
-        // Apply small knockback
         Vector knock = target.getLocation().toVector().subtract(clone.getLocation().toVector()).normalize().multiply(0.3);
         knock.setY(Math.max(0.1, knock.getY()));
         target.setVelocity(target.getVelocity().add(knock));
 
-        // Visual and sound effects
         clone.getWorld().playSound(clone.getLocation(), Sound.ENTITY_PLAYER_ATTACK_SWEEP, 0.5f, 1.5f);
         spawnHitParticles(clone.getLocation());
-        
-        // Level 5+: apply SLOWNESS and NAUSEA on collision
+
         if (sl.getLevel() >= 5) {
             target.addPotionEffect(new org.bukkit.potion.PotionEffect(org.bukkit.potion.PotionEffectType.SLOWNESS, 40, 1));
             target.addPotionEffect(new org.bukkit.potion.PotionEffect(org.bukkit.potion.PotionEffectType.NAUSEA, 60, 0));
         }
 
-        // Remove the clone
         DisguiseAPI.undisguiseToAll(clone);
         clone.remove();
     }
@@ -298,11 +313,8 @@ public class CloneSwarmAbility implements Ability {
             }
 
             if (clone.stand != null && !clone.stand.isDead()) {
-                // Final burst effect
                 spawnBurstParticles(clone.stand.getLocation());
                 clone.stand.getWorld().playSound(clone.stand.getLocation(), Sound.ENTITY_ENDERMAN_TELEPORT, 0.5f, 1.2f);
-
-                // Remove the clone
                 DisguiseAPI.undisguiseToAll(clone.stand);
                 clone.stand.remove();
             }
@@ -318,55 +330,22 @@ public class CloneSwarmAbility implements Ability {
     }
 
     private void spawnParticles(Location loc) {
-        loc.getWorld().spawnParticle(
-                Particle.DUST,
-                loc,
-                30,
-                0.5, 1.0, 0.5,
-                0.5,
-                new DustOptions(Color.fromRGB(255, 105, 180), 1.5f),
-                true
-        );
+        loc.getWorld().spawnParticle(Particle.DUST, loc, 30, 0.5, 1.0, 0.5, 0.5, new DustOptions(Color.fromRGB(255, 105, 180), 1.5f), true);
     }
 
     private void spawnTinyParticles(Location loc) {
-        loc.getWorld().spawnParticle(
-                Particle.DUST,
-                loc,
-                5,
-                0.2, 0.3, 0.2,
-                0.01,
-                new DustOptions(Color.fromRGB(255, 105, 180), 1.0f),
-                true
-        );
+        loc.getWorld().spawnParticle(Particle.DUST, loc, 5, 0.2, 0.3, 0.2, 0.01, new DustOptions(Color.fromRGB(255, 105, 180), 1.0f), true);
     }
 
     private void spawnHitParticles(Location loc) {
-        loc.getWorld().spawnParticle(
-                Particle.DUST,
-                loc,
-                30,
-                0.5, 0.5, 0.5,
-                0.5,
-                new DustOptions(Color.fromRGB(255, 0, 128), 1.5f),
-                true
-        );
+        loc.getWorld().spawnParticle(Particle.DUST, loc, 30, 0.5, 0.5, 0.5, 0.5, new DustOptions(Color.fromRGB(255, 0, 128), 1.5f), true);
     }
 
     private void spawnBurstParticles(Location loc) {
-        loc.getWorld().spawnParticle(
-                Particle.DUST,
-                loc,
-                50,
-                1.0, 1.0, 1.0,
-                0.5,
-                new DustOptions(Color.fromRGB(255, 105, 180), 2.0f),
-                true
-        );
+        loc.getWorld().spawnParticle(Particle.DUST, loc, 50, 1.0, 1.0, 1.0, 0.5, new DustOptions(Color.fromRGB(255, 105, 180), 2.0f), true);
     }
 
     private void spawnSwarmParticles(Location loc) {
-        // Create a spiral effect around the player
         for (double i = 0; i < Math.PI * 2; i += Math.PI / 12) {
             double radius = 1.5;
             double x = Math.cos(i) * radius;
@@ -374,15 +353,7 @@ public class CloneSwarmAbility implements Ability {
 
             for (double y = 0; y < 2.0; y += 0.25) {
                 Location particleLoc = loc.clone().add(x, y, z);
-                loc.getWorld().spawnParticle(
-                        Particle.DUST,
-                        particleLoc,
-                        1,
-                        0, 0, 0,
-                        0,
-                        new DustOptions(Color.fromRGB(255, 105, 180), 1.5f),
-                        true
-                );
+                loc.getWorld().spawnParticle(Particle.DUST, particleLoc, 1, 0, 0, 0, 0, new DustOptions(Color.fromRGB(255, 105, 180), 1.5f), true);
             }
         }
     }

@@ -24,7 +24,7 @@ public class ShadowCreaturesAbility implements Ability {
     private int manaCost = 60;
     private String requiredClass = "mindshaper";
     private int chargeTime = 10;
-    private int duration = 20 * 12;
+    private int duration = 40 * 12;
     private double attackRange = 8.0;
     private int damage = 1;
     private double orbDistance = 2.0;
@@ -463,7 +463,7 @@ public class ShadowCreaturesAbility implements Ability {
         cooldown = cfg.getInt(base + "cooldown", cooldown);
         manaCost = cfg.getInt(base + "mana-cost", manaCost);
         chargeTime = cfg.getInt(base + "charge-time", chargeTime);
-        duration = cfg.getInt(base + "duration", 15) * 5;
+        duration = cfg.getInt(base + "duration", 30) * 5;
         attackRange = cfg.getDouble(base + "attack-range", attackRange);
         damage = cfg.getInt(base + "damage", damage);
         orbDistance = cfg.getDouble(base + "orb-distance", orbDistance);
